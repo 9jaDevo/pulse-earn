@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { RewardService } from '../services/rewardService';
+import { BadgeService } from '../services/badgeService';
 import type {
   DailyRewardStatus,
   SpinResult,
@@ -54,6 +55,13 @@ export const useRewards = (userId?: string) => {
     } else {
       // Refresh status after spin
       await fetchStatus(userId);
+      
+      // Check for jackpot badge
+      if (data && data.points === 250) {
+        // This is a jackpot spin, check for badge
+        await BadgeService.checkAndAwardBadges(userId);
+      }
+      
       setLoading(false);
       return { success: true, result: data };
     }
@@ -96,6 +104,10 @@ export const useRewards = (userId?: string) => {
     } else {
       // Refresh status after trivia
       await fetchStatus(userId);
+      
+      // Check for trivia-related badges
+      await BadgeService.checkAndAwardBadges(userId);
+      
       setLoading(false);
       return { success: true, result: data };
     }
@@ -118,6 +130,10 @@ export const useRewards = (userId?: string) => {
     } else {
       // Refresh status after ad watch
       await fetchStatus(userId);
+      
+      // Check for ad-related badges
+      await BadgeService.checkAndAwardBadges(userId);
+      
       setLoading(false);
       return { success: true, result: data };
     }
