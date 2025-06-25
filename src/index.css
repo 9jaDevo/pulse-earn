@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes enter {
+  0% { transform: translateY(-8px) scale(0.95); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.animate-enter {
+  animation: enter 0.4s cubic-bezier(0.21, 1.02, 0.73, 1) forwards;
+}
