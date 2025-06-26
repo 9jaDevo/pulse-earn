@@ -105,7 +105,7 @@ export class AdminService {
     message: string;
     time: string;
     timestamp: Date;
-  }>>>> {
+  }>>> {
     try {
       // Get recent user registrations
       const { data: newUsers, error: usersError } = await supabase
@@ -254,7 +254,7 @@ export class AdminService {
     country: string;
     userCount: number;
     percentage: number;
-  }>>>> {
+  }>>> {
     try {
       // Get total user count
       const { count: totalUsers, error: countError } = await supabase
