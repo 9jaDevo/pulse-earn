@@ -3,31 +3,105 @@ import type { ServiceResponse } from './profileService';
 
 /**
  * Admin Service
- *
- * This service handles fetching various statistics and data points
- * specifically for the admin dashboard.
+ * 
+ * This service handles all admin-related operations including:
+ * - Dashboard statistics and analytics
+ * - User management
+ * - Content moderation
+ * - System settings
+ * 
+ * When migrating to Node.js backend, only this file needs to be updated
+ * to make HTTP requests instead of direct Supabase calls.
  */
 export class AdminService {
   /**
-   * Fetches overall platform statistics using a Supabase RPC function.
+   * Get platform overview statistics
    */
   static async getPlatformStats(): Promise<ServiceResponse<{
-    total_users: number;
-    active_polls: number;
-    total_points_distributed: number;
-    total_votes: number;
-    new_users_today: number;
-    polls_created_today: number;
+    totalUsers: number;
+    activeUsers: number;
+    totalPolls: number;
+    totalVotes: number;
+    totalPoints: number;
+    recentSignups: number;
   }>> {
     try {
-      const { data, error } = await supabase.rpc('get_platform_stats');
-
-      if (error) {
-        return { data: null, error: error.message };
+      // Get total users
+      const { count: totalUsers, error: usersError } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
+      
+      if (usersError) {
+        return { data: null, error: usersError.message };
       }
-
-      // The RPC function returns an array, we expect a single object
-      return { data: data ? data[0] : null, error: null };
+      
+      // Get active users (users who have activity in the last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const { count: activeUsers, error: activeError } = await supabase
+        .from('daily_reward_history')
+        .select('user_id', { count: 'exact', head: true })
+        .gte('created_at', sevenDaysAgo.toISOString())
+        .limit(1);
+      
+      if (activeError) {
+        return { data: null, error: activeError.message };
+      }
+      
+      // Get total polls
+      const { count: totalPolls, error: pollsError } = await supabase
+        .from('polls')
+        .select('*', { count: 'exact', head: true });
+      
+      if (pollsError) {
+        return { data: null, error: pollsError.message };
+      }
+      
+      // Get total votes
+      const { count: totalVotes, error: votesError } = await supabase
+        .from('poll_votes')
+        .select('*', { count: 'exact', head: true });
+      
+      if (votesError) {
+        return { data: null, error: votesError.message };
+      }
+      
+      // Get total points
+      const { data: pointsData, error: pointsError } = await supabase
+        .from('profiles')
+        .select('points');
+      
+      if (pointsError) {
+        return { data: null, error: pointsError.message };
+      }
+      
+      const totalPoints = pointsData?.reduce((sum, profile) => sum + profile.points, 0) || 0;
+      
+      // Get recent signups (last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const { count: recentSignups, error: signupsError } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', thirtyDaysAgo.toISOString());
+      
+      if (signupsError) {
+        return { data: null, error: signupsError.message };
+      }
+      
+      return {
+        data: {
+          totalUsers: totalUsers || 0,
+          activeUsers: activeUsers || 0,
+          totalPolls: totalPolls || 0,
+          totalVotes: totalVotes || 0,
+          totalPoints,
+          recentSignups: recentSignups || 0
+        },
+        error: null
+      };
     } catch (error) {
       return {
         data: null,
@@ -37,141 +111,76 @@ export class AdminService {
   }
 
   /**
-   * Fetches revenue statistics from country_metrics table.
-   * Calculates total revenue and monthly change.
+   * Get recent activity for admin dashboard
    */
-  static async getRevenueStats(): Promise<ServiceResponse<{
-    totalRevenue: number;
-    monthlyChange: number;
-  }>> {
-    try {
-      const today = new Date();
-      const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 30);
-
-      const sixtyDaysAgo = new Date(today);
-      sixtyDaysAgo.setDate(today.getDate() - 60);
-
-      // Fetch data for the last 30 days
-      const { data: currentMonthData, error: currentMonthError } = await supabase
-        .from('country_metrics')
-        .select('ad_revenue')
-        .gte('metric_date', thirtyDaysAgo.toISOString().split('T')[0])
-        .lte('metric_date', today.toISOString().split('T')[0]);
-
-      if (currentMonthError) {
-        return { data: null, error: currentMonthError.message };
-      }
-
-      const totalRevenue = (currentMonthData || []).reduce((sum, metric) => sum + metric.ad_revenue, 0);
-
-      // Fetch data for the previous 30 days to calculate change
-      const { data: previousMonthData, error: previousMonthError } = await supabase
-        .from('country_metrics')
-        .select('ad_revenue')
-        .gte('metric_date', sixtyDaysAgo.toISOString().split('T')[0])
-        .lt('metric_date', thirtyDaysAgo.toISOString().split('T')[0]);
-
-      if (previousMonthError) {
-        return { data: null, error: previousMonthError.message };
-      }
-
-      const previousMonthRevenue = (previousMonthData || []).reduce((sum, metric) => sum + metric.ad_revenue, 0);
-
-      const monthlyChange = previousMonthRevenue > 0 
-        ? ((totalRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
-        : 0;
-
-      return {
-        data: {
-          totalRevenue,
-          monthlyChange
-        },
-        error: null
-      };
-    } catch (error) {
-      return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Failed to get revenue stats'
-      };
-    }
-  }
-
-  /**
-   * Fetches recent activity for the admin dashboard
-   */
-  static async getRecentActivity(limit: number = 5): Promise<ServiceResponse<Array<{
-    type: string;
+  static async getRecentActivity(limit: number = 10): Promise<ServiceResponse<Array<{
+    type: 'user' | 'poll' | 'moderation' | 'system';
     message: string;
     time: string;
     timestamp: Date;
   }>>> {
     try {
       // Get recent user registrations
-      const { data: newUsers, error: usersError } = await supabase
+      const { data: recentUsers, error: usersError } = await supabase
         .from('profiles')
-        .select('email, created_at')
+        .select('id, email, created_at')
         .order('created_at', { ascending: false })
         .limit(limit);
-
+      
       if (usersError) {
         return { data: null, error: usersError.message };
       }
-
+      
       // Get recent polls
-      const { data: newPolls, error: pollsError } = await supabase
+      const { data: recentPolls, error: pollsError } = await supabase
         .from('polls')
-        .select('title, created_at')
+        .select('id, title, total_votes, created_at')
         .order('created_at', { ascending: false })
         .limit(limit);
-
+      
       if (pollsError) {
         return { data: null, error: pollsError.message };
       }
-
+      
       // Get recent moderator actions
-      const { data: modActions, error: modError } = await supabase
+      const { data: recentActions, error: actionsError } = await supabase
         .from('moderator_actions')
-        .select('action_type, target_table, created_at')
+        .select('id, action_type, target_id, target_table, created_at')
         .order('created_at', { ascending: false })
         .limit(limit);
-
-      if (modError) {
-        return { data: null, error: modError.message };
+      
+      if (actionsError) {
+        return { data: null, error: actionsError.message };
       }
-
+      
       // Combine and sort all activities
-      const activities: Array<{
-        type: string;
-        message: string;
-        time: string;
-        timestamp: Date;
-      }> = [
-        ...(newUsers || []).map(user => ({
-          type: 'user',
+      const allActivities = [
+        ...(recentUsers || []).map(user => ({
+          type: 'user' as const,
           message: `New user registration: ${user.email}`,
-          time: this.formatRelativeTime(new Date(user.created_at)),
+          time: this.getTimeAgo(new Date(user.created_at)),
           timestamp: new Date(user.created_at)
         })),
-        ...(newPolls || []).map(poll => ({
-          type: 'poll',
+        ...(recentPolls || []).map(poll => ({
+          type: 'poll' as const,
           message: `New poll created: "${poll.title}"`,
-          time: this.formatRelativeTime(new Date(poll.created_at)),
+          time: this.getTimeAgo(new Date(poll.created_at)),
           timestamp: new Date(poll.created_at)
         })),
-        ...(modActions || []).map(action => ({
-          type: 'moderation',
-          message: `${this.formatActionType(action.action_type)} on ${action.target_table}`,
-          time: this.formatRelativeTime(new Date(action.created_at)),
+        ...(recentActions || []).map(action => ({
+          type: 'moderation' as const,
+          message: `${this.formatActionType(action.action_type)} on ${action.target_table} #${action.target_id.substring(0, 8)}`,
+          time: this.getTimeAgo(new Date(action.created_at)),
           timestamp: new Date(action.created_at)
         }))
       ];
-
-      // Sort by timestamp, most recent first
-      activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-      // Return only the most recent activities
-      return { data: activities.slice(0, limit), error: null };
+      
+      // Sort by timestamp (most recent first) and limit
+      const sortedActivities = allActivities
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        .slice(0, limit);
+      
+      return { data: sortedActivities, error: null };
     } catch (error) {
       return {
         data: null,
@@ -181,61 +190,76 @@ export class AdminService {
   }
 
   /**
-   * Format action type to be more readable
+   * Get top countries by user count
    */
-  private static formatActionType(actionType: string): string {
-    return actionType
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  }
-
-  /**
-   * Format relative time (e.g., "2 hours ago")
-   */
-  private static formatRelativeTime(date: Date): string {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.round(diffMs / 1000);
-    const diffMin = Math.round(diffSec / 60);
-    const diffHour = Math.round(diffMin / 60);
-    const diffDay = Math.round(diffHour / 24);
-
-    if (diffSec < 60) return 'just now';
-    if (diffMin < 60) return `${diffMin} minute${diffMin > 1 ? 's' : ''} ago`;
-    if (diffHour < 24) return `${diffHour} hour${diffHour > 1 ? 's' : ''} ago`;
-    if (diffDay < 7) return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`;
-    
-    return date.toLocaleDateString();
-  }
-
-  /**
-   * Get user growth data for the chart
-   */
-  static async getUserGrowthData(days: number = 7): Promise<ServiceResponse<number[]>> {
+  static async getTopCountries(limit: number = 5): Promise<ServiceResponse<Array<{
+    country: string;
+    count: number;
+    percentage: number;
+  }>>> {
     try {
-      const result: number[] = [];
-      const today = new Date();
+      // Use the RPC function to get user counts by country
+      const { data, error } = await supabase
+        .rpc('get_user_counts_by_country');
       
-      // For each of the last N days
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
+      if (error) {
+        return { data: null, error: error.message };
+      }
+      
+      // Get total users for percentage calculation
+      const { count: totalUsers } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
+      
+      // Calculate percentages and limit results
+      const topCountries = (data || [])
+        .slice(0, limit)
+        .map(item => ({
+          country: item.country,
+          count: Number(item.user_count),
+          percentage: totalUsers ? (Number(item.user_count) / totalUsers) * 100 : 0
+        }));
+      
+      return { data: topCountries, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get top countries'
+      };
+    }
+  }
+
+  /**
+   * Get user growth data for chart
+   */
+  static async getUserGrowthData(days: number = 7): Promise<ServiceResponse<Array<{
+    date: string;
+    count: number;
+  }>>> {
+    try {
+      const result = [];
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days + 1);
+      
+      // Loop through each day and get the count
+      for (let i = 0; i < days; i++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(currentDate.getDate() + i);
         
-        // Count users created on this date
-        const { count, error } = await supabase
+        const nextDate = new Date(currentDate);
+        nextDate.setDate(nextDate.getDate() + 1);
+        
+        const { count } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true })
-          .gte('created_at', `${dateStr}T00:00:00`)
-          .lt('created_at', `${dateStr}T23:59:59`);
+          .gte('created_at', currentDate.toISOString())
+          .lt('created_at', nextDate.toISOString());
         
-        if (error) {
-          console.error(`Error fetching user count for ${dateStr}:`, error);
-          result.push(0); // Push 0 on error
-        } else {
-          result.push(count || 0);
-        }
+        result.push({
+          date: currentDate.toISOString().split('T')[0],
+          count: count || 0
+        });
       }
       
       return { data: result, error: null };
@@ -248,45 +272,93 @@ export class AdminService {
   }
 
   /**
-   * Get top countries by user count
+   * Get system health metrics
    */
-  static async getTopCountries(limit: number = 5): Promise<ServiceResponse<Array<{
-    country: string;
-    userCount: number;
-    percentage: number;
-  }>>> {
+  static async getSystemHealth(): Promise<ServiceResponse<{
+    serverStatus: 'operational' | 'degraded' | 'down';
+    databaseStatus: 'healthy' | 'issues' | 'down';
+    apiResponseTime: number;
+    uptime: number;
+  }>> {
     try {
-      // Get total user count
-      const { count: totalUsers, error: countError } = await supabase
+      // This would typically call backend health check endpoints
+      // For now, we'll simulate with some reasonable values
+      
+      // Check database connection
+      const startTime = Date.now();
+      const { data, error } = await supabase
         .from('profiles')
-        .select('*', { count: 'exact', head: true });
+        .select('count(*)', { count: 'exact', head: true })
+        .limit(1);
       
-      if (countError) {
-        return { data: null, error: countError.message };
-      }
+      const apiResponseTime = Date.now() - startTime;
       
-      // Get count by country using RPC function
-      const { data, error } = await supabase.rpc('get_user_counts_by_country');
+      const databaseStatus = error ? 'issues' : 'healthy';
+      const serverStatus = error ? 'degraded' : 'operational';
       
-      if (error) {
-        return { data: null, error: error.message };
-      }
-      
-      // Calculate percentages and limit results
-      const topCountries = (data || [])
-        .slice(0, limit)
-        .map(item => ({
-          country: item.country,
-          userCount: parseInt(item.user_count),
-          percentage: totalUsers ? (parseInt(item.user_count) / totalUsers) * 100 : 0
-        }));
-      
-      return { data: topCountries, error: null };
+      return {
+        data: {
+          serverStatus,
+          databaseStatus,
+          apiResponseTime,
+          uptime: 99.9 // Simulated uptime percentage
+        },
+        error: null
+      };
     } catch (error) {
       return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Failed to get top countries'
+        data: {
+          serverStatus: 'down',
+          databaseStatus: 'down',
+          apiResponseTime: 0,
+          uptime: 0
+        },
+        error: error instanceof Error ? error.message : 'Failed to get system health'
       };
     }
   }
+
+  /**
+   * Helper method to format time ago
+   */
+  private static getTimeAgo(date: Date): string {
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + ' years ago';
+    
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + ' months ago';
+    
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + ' days ago';
+    
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + ' hours ago';
+    
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + ' minutes ago';
+    
+    return Math.floor(seconds) + ' seconds ago';
+  }
+
+  /**
+   * Helper method to format action type
+   */
+  private static formatActionType(actionType: string): string {
+    // Convert snake_case or camelCase to Title Case with spaces
+    return actionType
+      .replace(/_/g, ' ')
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^\w/, c => c.toUpperCase());
+  }
 }
+
+// Export individual functions for backward compatibility and easier testing
+export const {
+  getPlatformStats,
+  getRecentActivity,
+  getTopCountries,
+  getUserGrowthData,
+  getSystemHealth
+} = AdminService;
