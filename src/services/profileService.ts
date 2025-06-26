@@ -398,17 +398,23 @@ export class ProfileService {
         .from('profiles')
         .select('points')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] User points fetch result:', { success: !userError, points: userProfile?.points });
       if (userError) {
         return { data: null, error: userError.message };
       }
 
+      // If no profile found, return rank 0
+      if (!userProfile) {
+        console.log('[ProfileService] No profile found for user, returning rank 0');
+        return { data: 0, error: null };
+      }
+
       // Count users with more points
       const { count, error: countError } = await supabase
         .from('profiles')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .gt('points', userProfile.points);
 
       console.log('[ProfileService] Rank calculation result:', { success: !countError, usersWithMorePoints: count });
