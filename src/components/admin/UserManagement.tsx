@@ -14,7 +14,9 @@ import {
   User,
   Globe,
   Zap,
-  AlertTriangle
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { ProfileService } from '../../services/profileService';
 import { Database } from '../../lib/supabase';
@@ -36,6 +38,11 @@ export const UserManagement: React.FC = () => {
   const [editLoading, setEditLoading] = useState(false);
   const { successToast, errorToast } = useToast();
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [usersPerPage, setUsersPerPage] = useState(10);
+
   // Edit user form state
   const [editForm, setEditForm] = useState({
     name: '',
@@ -47,25 +54,37 @@ export const UserManagement: React.FC = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [currentPage, usersPerPage, roleFilter]);
 
   const fetchUsers = async () => {
     setLoading(true);
     setError(null);
     
-    const { data, error: serviceError } = await ProfileService.fetchProfiles({
-      limit: 100,
-      orderBy: 'created_at',
-      order: 'desc'
-    });
-    
-    if (serviceError) {
-      setError(serviceError);
-    } else {
-      setUsers(data || []);
+    try {
+      const offset = (currentPage - 1) * usersPerPage;
+      
+      const { data, error: serviceError } = await ProfileService.fetchProfiles({
+        limit: usersPerPage,
+        offset,
+        orderBy: 'created_at',
+        order: 'desc',
+        role: roleFilter !== 'all' ? roleFilter as Profile['role'] : undefined
+      });
+      
+      if (serviceError) {
+        setError(serviceError);
+        errorToast(`Failed to fetch users: ${serviceError}`);
+      } else if (data) {
+        setUsers(data.profiles);
+        setTotalUsers(data.totalCount);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMessage);
+      errorToast(`Error: ${errorMessage}`);
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   const handleUpdateUser = async () => {
@@ -169,13 +188,25 @@ export const UserManagement: React.FC = () => {
   };
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    return matchesSearch && matchesRole;
+    const matchesSearch = !searchTerm || 
+      (user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesSearch;
   });
 
-  if (loading) {
+  // Calculate pagination
+  const totalPages = Math.ceil(totalUsers / usersPerPage);
+  const canGoPrevious = currentPage > 1;
+  const canGoNext = currentPage < totalPages;
+
+  // Handle page changes
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  if (loading && users.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -194,7 +225,7 @@ export const UserManagement: React.FC = () => {
         </div>
         <div className="mt-4 md:mt-0">
           <span className="bg-primary-100 text-primary-700 px-3 py-1 rounded-full text-sm font-medium">
-            {filteredUsers.length} users
+            {totalUsers} total users
           </span>
         </div>
       </div>
@@ -217,7 +248,10 @@ export const UserManagement: React.FC = () => {
           <div className="flex gap-2">
             <select
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setCurrentPage(1); // Reset to first page when filter changes
+              }}
               className="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="all">All Roles</option>
@@ -225,6 +259,19 @@ export const UserManagement: React.FC = () => {
               <option value="moderator">Moderators</option>
               <option value="ambassador">Ambassadors</option>
               <option value="admin">Admins</option>
+            </select>
+            <select
+              value={usersPerPage}
+              onChange={(e) => {
+                setUsersPerPage(Number(e.target.value));
+                setCurrentPage(1); // Reset to first page when items per page changes
+              }}
+              className="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="10">10 per page</option>
+              <option value="20">20 per page</option>
+              <option value="50">50 per page</option>
+              <option value="100">100 per page</option>
             </select>
           </div>
         </div>
@@ -322,7 +369,7 @@ export const UserManagement: React.FC = () => {
                             country: user.country || '',
                             points: user.points,
                             role: user.role,
-                            is_suspended: user.is_suspended
+                            is_suspended: user.is_suspended || false
                           });
                           setShowEditModal(true);
                         }}
@@ -332,7 +379,7 @@ export const UserManagement: React.FC = () => {
                         <Edit className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => handleToggleSuspension(user.id, user.is_suspended)}
+                        onClick={() => handleToggleSuspension(user.id, user.is_suspended || false)}
                         className={`${user.is_suspended ? 'text-success-600 hover:text-success-900' : 'text-error-600 hover:text-error-900'}`}
                         title={user.is_suspended ? 'Unsuspend User' : 'Suspend User'}
                       >
@@ -360,6 +407,109 @@ export const UserManagement: React.FC = () => {
                 : 'No users have been registered yet.'
               }
             </p>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={!canGoPrevious}
+                className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                  canGoPrevious 
+                    ? 'bg-white text-gray-700 hover:bg-gray-50' 
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={!canGoNext}
+                className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                  canGoNext 
+                    ? 'bg-white text-gray-700 hover:bg-gray-50' 
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Next
+              </button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Showing <span className="font-medium">{(currentPage - 1) * usersPerPage + 1}</span> to{' '}
+                  <span className="font-medium">
+                    {Math.min(currentPage * usersPerPage, totalUsers)}
+                  </span>{' '}
+                  of <span className="font-medium">{totalUsers}</span> users
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                  <button
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={!canGoPrevious}
+                    className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 text-sm font-medium ${
+                      canGoPrevious 
+                        ? 'bg-white text-gray-500 hover:bg-gray-50' 
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <span className="sr-only">Previous</span>
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  
+                  {/* Page numbers */}
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    // Show pages around current page
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      // If 5 or fewer pages, show all
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      // If near start, show first 5 pages
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      // If near end, show last 5 pages
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      // Otherwise show current page and 2 pages on each side
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => goToPage(pageNum)}
+                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                          currentPage === pageNum
+                            ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
+                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  
+                  <button
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={!canGoNext}
+                    className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${
+                      canGoNext 
+                        ? 'bg-white text-gray-500 hover:bg-gray-50' 
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <span className="sr-only">Next</span>
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </nav>
+              </div>
+            </div>
           </div>
         )}
       </div>

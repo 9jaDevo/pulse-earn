@@ -27,11 +27,11 @@ export class ProfileService {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .limit(1);
+        .maybeSingle();
 
       console.log('[ProfileService] Profile fetch result:', { 
         success: !error, 
-        hasData: !!data && data.length > 0, 
+        hasData: !!data, 
         errorCode: error?.code,
         errorMessage: error?.message
       });
@@ -40,14 +40,7 @@ export class ProfileService {
         return { data: null, error: error.message };
       }
 
-      // Extract the first profile from the array, or null if empty
-      const profile = data && data.length > 0 ? data[0] : null;
-
-      if (!profile) {
-        console.log('[ProfileService] No profile found, returning null');
-      }
-
-      return { data: profile, error: null };
+      return { data, error: null };
     } catch (error) {
       console.error('[ProfileService] Exception in fetchProfileById:', error);
       return { data: null, error: error instanceof Error ? error.message : 'Unknown error occurred' };
@@ -102,7 +95,7 @@ export class ProfileService {
         })
         .eq('id', userId)
         .select()
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] Profile update result:', { 
         success: !error, 
@@ -139,7 +132,7 @@ export class ProfileService {
         .from('profiles')
         .select('role')
         .eq('id', adminId)
-        .single();
+        .maybeSingle();
 
       if (adminError || !adminProfile || adminProfile.role !== 'admin') {
         return { 
@@ -157,7 +150,7 @@ export class ProfileService {
         })
         .eq('id', userId)
         .select()
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] Admin profile update result:', { 
         success: !error, 
@@ -200,21 +193,26 @@ export class ProfileService {
   static async fetchProfiles(
     options: {
       limit?: number;
+      offset?: number;
       orderBy?: 'points' | 'created_at';
       order?: 'asc' | 'desc';
       role?: Profile['role'];
       country?: string;
     } = {}
-  ): Promise<ServiceResponse<Profile[]>> {
+  ): Promise<ServiceResponse<{
+    profiles: Profile[];
+    totalCount: number;
+  }>> {
     console.log('[ProfileService] Fetching profiles with options:', options);
     try {
-      const { limit = 50, orderBy = 'points', order = 'desc', role, country } = options;
+      const { limit = 50, offset = 0, orderBy = 'points', order = 'desc', role, country } = options;
 
+      // Build the query for profiles
       let query = supabase
         .from('profiles')
         .select('*')
         .order(orderBy, { ascending: order === 'asc' })
-        .limit(limit);
+        .range(offset, offset + limit - 1);
 
       if (role) {
         query = query.eq('role', role);
@@ -224,18 +222,51 @@ export class ProfileService {
         query = query.eq('country', country);
       }
 
-      const { data, error } = await query;
+      // Get total count in a separate query
+      let countQuery = supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true });
+
+      if (role) {
+        countQuery = countQuery.eq('role', role);
+      }
+
+      if (country) {
+        countQuery = countQuery.eq('country', country);
+      }
+
+      // Run both queries in parallel
+      const [profilesResult, countResult] = await Promise.all([
+        query,
+        countQuery
+      ]);
+
+      const { data, error } = profilesResult;
+      const { count, error: countError } = countResult;
 
       console.log('[ProfileService] Profiles fetch result:', { 
         success: !error, 
-        count: data?.length || 0
+        count: data?.length || 0,
+        totalCount: count || 0,
+        error: error?.message,
+        countError: countError?.message
       });
 
       if (error) {
         return { data: null, error: error.message };
       }
 
-      return { data: data || [], error: null };
+      if (countError) {
+        return { data: null, error: countError.message };
+      }
+
+      return { 
+        data: { 
+          profiles: data || [], 
+          totalCount: count || 0 
+        }, 
+        error: null 
+      };
     } catch (error) {
       return { 
         data: null, 
@@ -258,11 +289,17 @@ export class ProfileService {
         .from('profiles')
         .select('points')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] Current profile fetch result:', { success: !fetchError, points: currentProfile?.points });
       if (fetchError) {
         return { data: null, error: fetchError.message };
+      }
+
+      // If no profile found, return error
+      if (!currentProfile) {
+        console.log('[ProfileService] No profile found for user, returning error');
+        return { data: null, error: 'User profile not found' };
       }
 
       const newPoints = (currentProfile?.points || 0) + pointsToAdd;
@@ -275,7 +312,7 @@ export class ProfileService {
         })
         .eq('id', userId)
         .select()
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] Points update result:', { 
         success: !error, 
@@ -309,7 +346,7 @@ export class ProfileService {
         .from('profiles')
         .select('badges')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] Current profile badges fetch result:', { success: !fetchError, badges: currentProfile?.badges });
       if (fetchError) {
@@ -334,7 +371,7 @@ export class ProfileService {
         })
         .eq('id', userId)
         .select()
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] Badge add result:', { 
         success: !error, 
