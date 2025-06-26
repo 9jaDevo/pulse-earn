@@ -265,25 +265,21 @@ export class AdminService {
         return { data: null, error: countError.message };
       }
       
-      // Get count by country
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('country, count')
-        .not('country', 'is', null)
-        .group('country')
-        .order('count', { ascending: false })
-        .limit(limit);
+      // Get count by country using RPC function
+      const { data, error } = await supabase.rpc('get_user_counts_by_country');
       
       if (error) {
         return { data: null, error: error.message };
       }
       
-      // Calculate percentages
-      const topCountries = (data || []).map(item => ({
-        country: item.country,
-        userCount: parseInt(item.count),
-        percentage: totalUsers ? (parseInt(item.count) / totalUsers) * 100 : 0
-      }));
+      // Calculate percentages and limit results
+      const topCountries = (data || [])
+        .slice(0, limit)
+        .map(item => ({
+          country: item.country,
+          userCount: parseInt(item.user_count),
+          percentage: totalUsers ? (parseInt(item.user_count) / totalUsers) * 100 : 0
+        }));
       
       return { data: topCountries, error: null };
     } catch (error) {
