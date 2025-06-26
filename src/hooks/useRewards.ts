@@ -8,7 +8,10 @@ import type {
   TriviaResult,
   AdWatchResult,
   DailyRewardHistory,
-  TriviaSubmission
+  TriviaSubmission,
+  RedeemItemRequest,
+  RedeemItemResult,
+  RedeemedItem
 } from '../types/api';
 
 /**
@@ -22,6 +25,7 @@ export const useRewards = (userId?: string) => {
   const [status, setStatus] = useState<DailyRewardStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [redeemedItems, setRedeemedItems] = useState<RedeemedItem[]>([]);
 
   const fetchStatus = async (id: string) => {
     setLoading(true);
@@ -164,14 +168,63 @@ export const useRewards = (userId?: string) => {
     }
   };
 
+  const redeemStoreItem = async (request: RedeemItemRequest): Promise<{ success: boolean; result?: RedeemItemResult; error?: string }> => {
+    if (!userId) {
+      return { success: false, error: 'No user ID provided' };
+    }
+
+    setLoading(true);
+    setError(null);
+    
+    const { data, error: serviceError } = await RewardService.redeemStoreItem(userId, request);
+    
+    if (serviceError) {
+      setError(serviceError);
+      setLoading(false);
+      return { success: false, error: serviceError };
+    } else {
+      // Refresh redeemed items after redemption
+      await fetchRedeemedItems();
+      
+      setLoading(false);
+      return { success: true, result: data };
+    }
+  };
+
+  const fetchRedeemedItems = async (options: {
+    limit?: number;
+    status?: 'pending_fulfillment' | 'fulfilled' | 'cancelled';
+  } = {}): Promise<{ success: boolean; items?: RedeemedItem[]; error?: string }> => {
+    if (!userId) {
+      return { success: false, error: 'No user ID provided' };
+    }
+
+    setLoading(true);
+    setError(null);
+    
+    const { data, error: serviceError } = await RewardService.getRedeemedItems(userId, options);
+    
+    if (serviceError) {
+      setError(serviceError);
+      setLoading(false);
+      return { success: false, error: serviceError };
+    } else {
+      setRedeemedItems(data || []);
+      setLoading(false);
+      return { success: true, items: data };
+    }
+  };
+
   useEffect(() => {
     if (userId) {
       fetchStatus(userId);
+      fetchRedeemedItems();
     }
   }, [userId]);
 
   return {
     status,
+    redeemedItems,
     loading,
     error,
     fetchStatus: () => userId && fetchStatus(userId),
@@ -180,6 +233,8 @@ export const useRewards = (userId?: string) => {
     submitTriviaAnswer,
     watchAd,
     getHistory,
+    redeemStoreItem,
+    fetchRedeemedItems,
     refetch: () => userId && fetchStatus(userId)
   };
 };

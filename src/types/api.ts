@@ -379,3 +379,30 @@ export interface ContentReportCreateRequest {
   content_id: string;
   reason: string;
 }
+
+// Reward Store Types
+export interface RedeemItemRequest {
+  itemId: string;
+  itemName: string;
+  pointsCost: number;
+  fulfillmentDetails?: Record<string, any>;
+}
+
+export interface RedeemItemResult {
+  success: boolean;
+  message: string;
+  newPointsBalance?: number;
+  redeemedItemId?: string;
+}
+
+export interface RedeemedItem {
+  id: string;
+  user_id: string;
+  item_id: string;
+  item_name: string;
+  points_cost: number;
+  status: 'pending_fulfillment' | 'fulfilled' | 'cancelled';
+  fulfillment_details?: Record<string, any>;
+  redeemed_at: string;
+  updated_at: string;
+}

@@ -8,7 +8,10 @@ import type {
   TriviaSubmission,
   TriviaResult,
   AdWatchResult,
-  DailyRewardHistory
+  DailyRewardHistory,
+  RedeemItemRequest,
+  RedeemItemResult,
+  RedeemedItem
 } from '../types/api';
 
 export interface TriviaGameSummary {
@@ -837,6 +840,132 @@ export class RewardService {
       };
     }
   }
+
+  /**
+   * Redeem a store item for points
+   */
+  static async redeemStoreItem(
+    userId: string,
+    request: RedeemItemRequest
+  ): Promise<ServiceResponse<RedeemItemResult>> {
+    try {
+      // 1. Check if user has enough points
+      const { data: profile, error: profileError } = await ProfileService.fetchProfileById(userId);
+      
+      if (profileError || !profile) {
+        return { data: null, error: profileError || 'User profile not found' };
+      }
+      
+      if (profile.points < request.pointsCost) {
+        return { 
+          data: null, 
+          error: `Insufficient points. You have ${profile.points} points, but this item costs ${request.pointsCost} points.` 
+        };
+      }
+
+      // 2. Deduct points from user's profile
+      // Note: ProfileService.updateUserPoints adds points, so we pass a negative value to deduct
+      const { data: updatedProfile, error: pointsError } = await ProfileService.updateUserPoints(
+        userId,
+        -request.pointsCost // Deduct points
+      );
+
+      if (pointsError) {
+        return { data: null, error: pointsError };
+      }
+
+      if (!updatedProfile) {
+        return { data: null, error: 'Failed to update user points.' };
+      }
+
+      // 3. Record the redemption in the redeemed_items table
+      const { data: redeemedItemRecord, error: recordError } = await supabase
+        .from('redeemed_items')
+        .insert({
+          user_id: userId,
+          item_id: request.itemId,
+          item_name: request.itemName,
+          points_cost: request.pointsCost,
+          fulfillment_details: request.fulfillmentDetails || {},
+          status: 'pending_fulfillment' // Initial status
+        })
+        .select()
+        .single();
+
+      if (recordError) {
+        // If recording fails, attempt to refund the points
+        await ProfileService.updateUserPoints(userId, request.pointsCost);
+        return { data: null, error: recordError.message };
+      }
+
+      // 4. Record in reward history for tracking
+      await supabase
+        .from('daily_reward_history')
+        .insert({
+          user_id: userId,
+          reward_type: 'spin', // Using existing type as a workaround
+          points_earned: -request.pointsCost, // Negative to indicate points spent
+          reward_data: { 
+            redemption_type: 'store_item',
+            item_id: request.itemId,
+            item_name: request.itemName
+          }
+        });
+
+      const result: RedeemItemResult = {
+        success: true,
+        message: `Successfully redeemed ${request.itemName} for ${request.pointsCost} points!`,
+        newPointsBalance: updatedProfile.points,
+        redeemedItemId: redeemedItemRecord.id
+      };
+
+      return { data: result, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to redeem item'
+      };
+    }
+  }
+
+  /**
+   * Get user's redeemed items
+   */
+  static async getRedeemedItems(
+    userId: string,
+    options: {
+      limit?: number;
+      status?: 'pending_fulfillment' | 'fulfilled' | 'cancelled';
+    } = {}
+  ): Promise<ServiceResponse<RedeemedItem[]>> {
+    try {
+      const { limit = 50, status } = options;
+
+      let query = supabase
+        .from('redeemed_items')
+        .select('*')
+        .eq('user_id', userId)
+        .order('redeemed_at', { ascending: false })
+        .limit(limit);
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      return { data: data || [], error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get redeemed items'
+      };
+    }
+  }
 }
 
 // Export individual functions for backward compatibility and easier testing
@@ -852,5 +981,7 @@ export const {
   recordAdWatch,
   getRewardHistory,
   getTriviaQuestions,
-  resetDailyRewards
+  resetDailyRewards,
+  redeemStoreItem,
+  getRedeemedItems
 } = RewardService;
