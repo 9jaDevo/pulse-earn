@@ -11,14 +11,21 @@ import {
   XCircle,
   Crown,
   Star,
-  User
+  User,
+  Globe,
+  Zap,
+  AlertTriangle
 } from 'lucide-react';
 import { ProfileService } from '../../services/profileService';
 import { Database } from '../../lib/supabase';
+import { useToast } from '../../hooks/useToast';
+import { CountrySelect } from '../ui/CountrySelect';
+import { useAuth } from '../../contexts/AuthContext';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export const UserManagement: React.FC = () => {
+  const { user } = useAuth();
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +34,16 @@ export const UserManagement: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
+  const { successToast, errorToast } = useToast();
+
+  // Edit user form state
+  const [editForm, setEditForm] = useState({
+    name: '',
+    country: '',
+    points: 0,
+    role: 'user' as Profile['role'],
+    is_suspended: false
+  });
 
   useEffect(() => {
     fetchUsers();
@@ -51,23 +68,78 @@ export const UserManagement: React.FC = () => {
     setLoading(false);
   };
 
-  const handleRoleChange = async (userId: string, newRole: Profile['role']) => {
+  const handleUpdateUser = async () => {
+    if (!selectedUser || !user) return;
+    
     setEditLoading(true);
     
-    const { error } = await ProfileService.updateUserProfile(userId, { role: newRole });
-    
-    if (error) {
-      alert('Failed to update user role: ' + error);
-    } else {
-      // Update local state
-      setUsers(prev => prev.map(user => 
-        user.id === userId ? { ...user, role: newRole } : user
-      ));
-      setShowEditModal(false);
-      setSelectedUser(null);
+    try {
+      const updates = {
+        name: editForm.name,
+        country: editForm.country || null,
+        points: editForm.points,
+        role: editForm.role,
+        is_suspended: editForm.is_suspended
+      };
+      
+      const { data, error } = await ProfileService.adminUpdateUserProfile(
+        user.id,
+        selectedUser.id,
+        updates
+      );
+      
+      if (error) {
+        errorToast(`Failed to update user: ${error}`);
+        setEditLoading(false);
+        return;
+      }
+      
+      if (data) {
+        // Update local state
+        setUsers(prev => prev.map(u => 
+          u.id === selectedUser.id ? { ...u, ...updates } : u
+        ));
+        
+        successToast(`User ${data.name || data.email} updated successfully`);
+        setShowEditModal(false);
+        setSelectedUser(null);
+      }
+    } catch (err) {
+      errorToast('An unexpected error occurred');
+      console.error(err);
+    } finally {
+      setEditLoading(false);
     }
+  };
+
+  const handleToggleSuspension = async (userId: string, currentStatus: boolean) => {
+    if (!user) return;
     
-    setEditLoading(false);
+    try {
+      const newStatus = !currentStatus;
+      const { data, error } = await ProfileService.adminUpdateUserProfile(
+        user.id,
+        userId,
+        { is_suspended: newStatus }
+      );
+      
+      if (error) {
+        errorToast(`Failed to ${newStatus ? 'suspend' : 'unsuspend'} user: ${error}`);
+        return;
+      }
+      
+      if (data) {
+        // Update local state
+        setUsers(prev => prev.map(u => 
+          u.id === userId ? { ...u, is_suspended: newStatus } : u
+        ));
+        
+        successToast(`User ${data.name || data.email} ${newStatus ? 'suspended' : 'unsuspended'} successfully`);
+      }
+    } catch (err) {
+      errorToast('An unexpected error occurred');
+      console.error(err);
+    }
   };
 
   const getRoleIcon = (role: Profile['role']) => {
@@ -184,6 +256,9 @@ export const UserManagement: React.FC = () => {
                   Country
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Joined
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -193,7 +268,7 @@ export const UserManagement: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
+                <tr key={user.id} className={`hover:bg-gray-50 ${user.is_suspended ? 'bg-error-50' : ''}`}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="w-10 h-10 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-full flex items-center justify-center text-white font-medium">
@@ -221,19 +296,53 @@ export const UserManagement: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {user.country || 'Not specified'}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {user.is_suspended ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-error-100 text-error-800">
+                        <Ban className="h-3 w-3 mr-1" />
+                        Suspended
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Active
+                      </span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(user.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => {
-                        setSelectedUser(user);
-                        setShowEditModal(true);
-                      }}
-                      className="text-primary-600 hover:text-primary-900 mr-3"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setEditForm({
+                            name: user.name || '',
+                            country: user.country || '',
+                            points: user.points,
+                            role: user.role,
+                            is_suspended: user.is_suspended
+                          });
+                          setShowEditModal(true);
+                        }}
+                        className="text-primary-600 hover:text-primary-900"
+                        title="Edit User"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleToggleSuspension(user.id, user.is_suspended)}
+                        className={`${user.is_suspended ? 'text-success-600 hover:text-success-900' : 'text-error-600 hover:text-error-900'}`}
+                        title={user.is_suspended ? 'Unsuspend User' : 'Suspend User'}
+                      >
+                        {user.is_suspended ? (
+                          <CheckCircle className="h-4 w-4" />
+                        ) : (
+                          <Ban className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -269,7 +378,7 @@ export const UserManagement: React.FC = () => {
               ×
             </button>
 
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Edit User Role</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Edit User</h2>
             
             <div className="mb-6">
               <div className="flex items-center space-x-3 mb-4">
@@ -277,42 +386,146 @@ export const UserManagement: React.FC = () => {
                   {(selectedUser.name || selectedUser.email).charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900">{selectedUser.name || 'No name'}</p>
-                  <p className="text-sm text-gray-500">{selectedUser.email}</p>
+                  <p className="font-medium text-gray-900">{selectedUser.email}</p>
+                  <p className="text-sm text-gray-500">ID: {selectedUser.id.substring(0, 8)}...</p>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Role
-              </label>
-              {(['user', 'moderator', 'ambassador', 'admin'] as const).map((role) => (
-                <button
-                  key={role}
-                  onClick={() => handleRoleChange(selectedUser.id, role)}
-                  disabled={editLoading}
-                  className={`w-full flex items-center space-x-3 p-3 rounded-lg border transition-colors ${
-                    selectedUser.role === role
-                      ? 'border-primary-300 bg-primary-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  } ${editLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                >
-                  {getRoleIcon(role)}
-                  <span className="font-medium text-gray-900 capitalize">{role}</span>
-                  {selectedUser.role === role && (
-                    <CheckCircle className="h-4 w-4 text-primary-600 ml-auto" />
-                  )}
-                </button>
-              ))}
+            <div className="space-y-4">
+              {/* Name Field */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Name
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="User's name"
+                  />
+                </div>
+              </div>
+
+              {/* Country Field */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Country
+                </label>
+                <div className="relative">
+                  <CountrySelect
+                    value={editForm.country}
+                    onChange={(country) => setEditForm(prev => ({ ...prev, country }))}
+                    placeholder="Select country"
+                    showFlag={true}
+                  />
+                </div>
+              </div>
+
+              {/* Points Field */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Points
+                </label>
+                <div className="relative">
+                  <Zap className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="number"
+                    value={editForm.points}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, points: parseInt(e.target.value) || 0 }))}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="User's points"
+                  />
+                </div>
+              </div>
+
+              {/* Role Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Role
+                </label>
+                <div className="space-y-2">
+                  {(['user', 'moderator', 'ambassador', 'admin'] as const).map((role) => (
+                    <button
+                      key={role}
+                      onClick={() => setEditForm(prev => ({ ...prev, role }))}
+                      disabled={editLoading}
+                      className={`w-full flex items-center space-x-3 p-3 rounded-lg border transition-colors ${
+                        editForm.role === role
+                          ? 'border-primary-300 bg-primary-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      } ${editLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      {getRoleIcon(role)}
+                      <span className="font-medium text-gray-900 capitalize">{role}</span>
+                      {editForm.role === role && (
+                        <CheckCircle className="h-4 w-4 text-primary-600 ml-auto" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Suspension Toggle */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-900">Account Status</p>
+                    <p className="text-sm text-gray-500">
+                      {editForm.is_suspended 
+                        ? 'User is currently suspended and cannot access the platform' 
+                        : 'User has normal access to the platform'}
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={!editForm.is_suspended}
+                      onChange={() => setEditForm(prev => ({ ...prev, is_suspended: !prev.is_suspended }))}
+                      className="sr-only peer" 
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                  </label>
+                </div>
+                {editForm.is_suspended && (
+                  <div className="mt-3 flex items-start space-x-2">
+                    <AlertTriangle className="h-5 w-5 text-error-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-error-600">
+                      Suspended users cannot log in or interact with the platform until unsuspended.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {editLoading && (
-              <div className="mt-4 text-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto"></div>
-                <p className="text-sm text-gray-600 mt-2">Updating role...</p>
-              </div>
-            )}
+            <div className="flex justify-end space-x-4 mt-6">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedUser(null);
+                }}
+                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateUser}
+                disabled={editLoading}
+                className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+              >
+                {editLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Changes</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

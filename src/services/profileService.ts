@@ -126,6 +126,77 @@ export class ProfileService {
   }
 
   /**
+   * Admin update of a user's profile
+   * This allows admins to update any user's profile including role and suspension status
+   */
+  static async adminUpdateUserProfile(
+    adminId: string,
+    userId: string,
+    updates: ProfileUpdate
+  ): Promise<ServiceResponse<Profile>> {
+    console.log('[ProfileService] Admin updating profile for user:', userId, 'by admin:', adminId, 'with updates:', updates);
+    try {
+      // First check if the requesting user is an admin
+      const { data: adminProfile, error: adminError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .single();
+
+      if (adminError || !adminProfile || adminProfile.role !== 'admin') {
+        return { 
+          data: null, 
+          error: 'Unauthorized: Only admins can perform this action' 
+        };
+      }
+
+      // Perform the update
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          ...updates, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      console.log('[ProfileService] Admin profile update result:', { 
+        success: !error, 
+        hasData: !!data,
+        errorMessage: error?.message
+      });
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      // Log the admin action
+      await supabase
+        .from('moderator_actions')
+        .insert({
+          moderator_id: adminId,
+          action_type: 'update_user_profile',
+          target_id: userId,
+          target_table: 'profiles',
+          reason: 'Admin user profile update',
+          metadata: { 
+            updates: { ...updates },
+            suspended: updates.is_suspended !== undefined ? updates.is_suspended : null,
+            role_change: updates.role !== undefined ? updates.role : null
+          }
+        });
+
+      return { data, error: null };
+    } catch (error) {
+      return { 
+        data: null, 
+        error: error instanceof Error ? error.message : 'Failed to update user profile' 
+      };
+    }
+  }
+
+  /**
    * Fetch multiple profiles (for leaderboards, etc.)
    */
   static async fetchProfiles(
@@ -366,6 +437,7 @@ export const {
   fetchProfileById,
   createProfile,
   updateUserProfile,
+  adminUpdateUserProfile,
   fetchProfiles,
   updateUserPoints,
   addBadgeToUser,
