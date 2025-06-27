@@ -29,7 +29,7 @@ export class AdminService {
       // Get total users
       const { count: totalUsers, error: usersError } = await supabase
         .from('profiles')
-        .select('id', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true });
       
       if (usersError) {
         return { data: null, error: usersError.message };
@@ -41,7 +41,7 @@ export class AdminService {
       
       const { count: activeUsers, error: activeError } = await supabase
         .from('daily_reward_history')
-        .select('user_id', { count: 'exact', head: true })
+        .select('*', { count: 'exact', head: true })
         .gte('created_at', sevenDaysAgo.toISOString())
         .limit(1);
       
@@ -52,7 +52,7 @@ export class AdminService {
       // Get total polls
       const { count: totalPolls, error: pollsError } = await supabase
         .from('polls')
-        .select('id', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true });
       
       if (pollsError) {
         return { data: null, error: pollsError.message };
@@ -61,7 +61,7 @@ export class AdminService {
       // Get total votes
       const { count: totalVotes, error: votesError } = await supabase
         .from('poll_votes')
-        .select('id', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true });
       
       if (votesError) {
         return { data: null, error: votesError.message };
@@ -84,7 +84,7 @@ export class AdminService {
       
       const { count: recentSignups, error: signupsError } = await supabase
         .from('profiles')
-        .select('id', { count: 'exact', head: true })
+        .select('*', { count: 'exact', head: true })
         .gte('created_at', thirtyDaysAgo.toISOString());
       
       if (signupsError) {
@@ -209,7 +209,7 @@ export class AdminService {
       // Get total users for percentage calculation
       const { count: totalUsers } = await supabase
         .from('profiles')
-        .select('id', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true });
       
       // Calculate percentages and limit results
       const topCountries = (data || [])
@@ -252,7 +252,7 @@ export class AdminService {
         
         const { count } = await supabase
           .from('profiles')
-          .select('id', { count: 'exact', head: true })
+          .select('*', { count: 'exact', head: true })
           .gte('created_at', currentDate.toISOString())
           .lt('created_at', nextDate.toISOString());
         
@@ -288,7 +288,7 @@ export class AdminService {
       const startTime = Date.now();
       const { data, error } = await supabase
         .from('profiles')
-        .select('count(*)', { count: 'exact', head: true })
+        .select('*', { count: 'exact', head: true })
         .limit(1);
       
       const apiResponseTime = Date.now() - startTime;
