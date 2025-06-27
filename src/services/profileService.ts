@@ -36,7 +36,7 @@ export class ProfileService {
         errorMessage: error?.message
       });
 
-      if (error) {
+      if (error && error.code !== 'PGRST116') {
         return { data: null, error: error.message };
       }
 
@@ -150,7 +150,7 @@ export class ProfileService {
         })
         .eq('id', userId)
         .select()
-        .maybeSingle();
+        .single();
 
       console.log('[ProfileService] Admin profile update result:', { 
         success: !error, 
