@@ -97,12 +97,12 @@ export class PollService {
   /**
    * Get all distinct poll categories
    */
-  static async getAllPollCategories(): Promise<ServiceResponse<string[]>> {
+  static async getAllPollCategories(): Promise<ServiceResponse<PollCategory[]>> {
     try {
       // First try to get categories from the poll_categories table
       const { data, error } = await supabase
         .from('poll_categories')
-        .select('name')
+        .select('*')
         .eq('is_active', true)
         .order('name');
 
@@ -112,10 +112,7 @@ export class PollService {
         return this.getDistinctPollCategories();
       }
 
-      // Extract category names
-      const categories = (data || []).map(item => item.name);
-      
-      return { data: categories, error: null };
+      return { data: data || [], error: null };
     } catch (err) {
       console.error('Error in getAllPollCategories:', err);
       // Fall back to distinct categories from polls
@@ -129,16 +126,16 @@ export class PollService {
   static async createPollCategory(
     name: string,
     description: string
-  ): Promise<ServiceResponse<{ name: string }>> {
+  ): Promise<ServiceResponse<PollCategory>> {
     try {
       // adjust to your schema—here we assume a separate table "poll_categories"
       const { data, error } = await supabase
         .from('poll_categories')
         .insert({ name, description })
-        .select('name')
+        .select('*')
         .single();
       if (error) return { data: null, error: error.message };
-      return { data: { name: data.name }, error: null };
+      return { data, error: null };
     } catch (err) {
       return { data: null, error: err instanceof Error ? err.message : 'Failed to create category' };
     }
@@ -1034,7 +1031,7 @@ export class PollService {
    * Get distinct poll categories from polls table
    * This is a fallback method if poll_categories table doesn't exist
    */
-  static async getDistinctPollCategories(): Promise<ServiceResponse<string[]>> {
+  static async getDistinctPollCategories(): Promise<ServiceResponse<PollCategory[]>> {
     try {
       const { data, error } = await supabase
         .from('polls')
@@ -1045,16 +1042,26 @@ export class PollService {
         return { data: null, error: error.message };
       }
       
-      // Extract unique categories
-      const categories = [...new Set((data || [])
+      // Extract unique categories and transform to PollCategory objects
+      const categoryNames = [...new Set((data || [])
         .map(poll => poll.category)
         .filter(Boolean)
       )].sort();
       
       // Add 'General' if it's not already included
-      if (!categories.includes('General')) {
-        categories.unshift('General');
+      if (!categoryNames.includes('General')) {
+        categoryNames.unshift('General');
       }
+      
+      // Transform to PollCategory objects
+      const categories: PollCategory[] = categoryNames.map(name => ({
+        id: name.toLowerCase().replace(/\s+/g, '-'), // Generate a simple ID
+        name,
+        description: null,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
       
       return { data: categories, error: null };
     } catch (error) {
