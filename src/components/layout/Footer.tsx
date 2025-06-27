@@ -2,10 +2,11 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Zap, Twitter, Facebook, Instagram, Mail } from 'lucide-react';
 import { FooterAd } from '../ads/FooterAd';
+import { ThemeToggle } from '../ui/ThemeToggle';
 
 export const Footer: React.FC = () => {
   return (
-    <footer className="bg-gray-900 text-white">
+    <footer className="bg-gray-900 dark:bg-gray-950 text-white">
       {/* Footer Ad */}
       <FooterAd />
       
@@ -23,7 +24,7 @@ export const Footer: React.FC = () => {
               Join our community-powered platform for interactive polls, engaging trivia, and rewarding experiences. 
               Earn points, climb leaderboards, and turn your participation into real rewards.
             </p>
-            <div className="flex space-x-4">
+            <div className="flex items-center space-x-4">
               <a href="#" className="text-gray-400 hover:text-primary-400 transition-colors">
                 <Twitter className="h-5 w-5" />
               </a>
@@ -36,6 +37,7 @@ export const Footer: React.FC = () => {
               <a href="#" className="text-gray-400 hover:text-primary-400 transition-colors">
                 <Mail className="h-5 w-5" />
               </a>
+              <ThemeToggle className="ml-2" />
             </div>
           </div>
 
