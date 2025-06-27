@@ -14,17 +14,23 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
-  Award
+  Award,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Users,
+  Star
 } from 'lucide-react';
 import { PollService } from '../../services/pollService';
 import { RewardService } from '../../services/rewardService';
 import { BadgeService } from '../../services/badgeService';
 import { useToast } from '../../hooks/useToast';
-import type { PollCategory, Poll, TriviaQuestion, Badge } from '../../types/api';
+import type { PollCategory, Poll, TriviaQuestion, Badge, TriviaGame } from '../../types/api';
 import { EditPollModal } from '../polls/EditPollModal';
 import { DeletePollModal } from '../polls/DeletePollModal';
 import { AddEditTriviaModal } from './AddEditTriviaModal';
 import { AddEditBadgeModal } from './AddEditBadgeModal';
+import { supabase } from '../../lib/supabase';
 
 export const ContentManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'polls' | 'categories' | 'trivia' | 'badges'>('polls');
@@ -50,7 +56,7 @@ export const ContentManagement: React.FC = () => {
   const [pollsPerPage] = useState(10);
 
   // Trivia Management State
-  const [triviaQuestions, setTriviaQuestions] = useState<TriviaQuestion[]>([]);
+  const [triviaGames, setTriviaGames] = useState<any[]>([]);
   const [triviaLoading, setTriviaLoading] = useState(false);
   const [triviaError, setTriviaError] = useState<string | null>(null);
   const [triviaPage, setTriviaPage] = useState(1);
@@ -58,6 +64,9 @@ export const ContentManagement: React.FC = () => {
   const [selectedTriviaQuestion, setSelectedTriviaQuestion] = useState<TriviaQuestion | null>(null);
   const [showAddEditTriviaModal, setShowAddEditTriviaModal] = useState(false);
   const [triviaPerPage] = useState(10);
+  const [expandedGameId, setExpandedGameId] = useState<string | null>(null);
+  const [gameQuestionsMap, setGameQuestionsMap] = useState<Record<string, TriviaQuestion[]>>({});
+  const [loadingGameQuestions, setLoadingGameQuestions] = useState<string | null>(null);
 
   // Badge Management State
   const [badges, setBadges] = useState<Badge[]>([]);
@@ -83,10 +92,10 @@ export const ContentManagement: React.FC = () => {
     }
   }, [activeTab, pollsPage]);
 
-  // Fetch trivia questions when trivia tab is active or page changes
+  // Fetch trivia games when trivia tab is active or page changes
   useEffect(() => {
     if (activeTab === 'trivia') {
-      fetchTriviaQuestions();
+      fetchTriviaGames();
     }
   }, [activeTab, triviaPage]);
 
@@ -200,27 +209,27 @@ export const ContentManagement: React.FC = () => {
   };
 
   // Trivia Management Functions
-  const fetchTriviaQuestions = async () => {
+  const fetchTriviaGames = async () => {
     setTriviaLoading(true);
     setTriviaError(null);
     
     try {
       const offset = (triviaPage - 1) * triviaPerPage;
       
-      // Fetch trivia questions with pagination
-      const { data, error } = await RewardService.getTriviaQuestions({
+      // Fetch trivia games with pagination
+      const { data, error } = await RewardService.getTriviaGameSummaries({
         limit: triviaPerPage
       });
       
       if (error) {
         setTriviaError(error);
-        errorToast(`Failed to fetch trivia questions: ${error}`);
+        errorToast(`Failed to fetch trivia games: ${error}`);
       } else {
-        setTriviaQuestions(data || []);
+        setTriviaGames(data || []);
         
         // Get total count for pagination
         const { count } = await supabase
-          .from('trivia_questions')
+          .from('trivia_games')
           .select('*', { count: 'exact', head: true });
         
         setTriviaTotalCount(count || 0);
@@ -231,6 +240,42 @@ export const ContentManagement: React.FC = () => {
       errorToast(`Error: ${errorMessage}`);
     } finally {
       setTriviaLoading(false);
+    }
+  };
+
+  const fetchQuestionsForGame = async (gameId: string) => {
+    // If we already have the questions for this game, no need to fetch again
+    if (gameQuestionsMap[gameId]) {
+      return;
+    }
+    
+    setLoadingGameQuestions(gameId);
+    
+    try {
+      const { data, error } = await RewardService.fetchTriviaQuestionsForGame(gameId);
+      
+      if (error) {
+        errorToast(`Failed to fetch questions: ${error}`);
+      } else {
+        setGameQuestionsMap(prev => ({
+          ...prev,
+          [gameId]: data || []
+        }));
+      }
+    } catch (err) {
+      errorToast('Failed to load questions');
+      console.error(err);
+    } finally {
+      setLoadingGameQuestions(null);
+    }
+  };
+
+  const handleToggleGameExpand = (gameId: string) => {
+    if (expandedGameId === gameId) {
+      setExpandedGameId(null);
+    } else {
+      setExpandedGameId(gameId);
+      fetchQuestionsForGame(gameId);
     }
   };
 
@@ -249,7 +294,18 @@ export const ContentManagement: React.FC = () => {
         errorToast(`Failed to delete question: ${error.message}`);
       } else {
         successToast('Trivia question deleted successfully');
-        fetchTriviaQuestions();
+        
+        // Update the local state to remove the deleted question
+        setGameQuestionsMap(prev => {
+          const newMap = { ...prev };
+          
+          // Find the game that contains this question and remove it
+          Object.keys(newMap).forEach(gameId => {
+            newMap[gameId] = newMap[gameId].filter(q => q.id !== questionId);
+          });
+          
+          return newMap;
+        });
       }
     } catch (err) {
       errorToast('An unexpected error occurred');
@@ -263,14 +319,20 @@ export const ContentManagement: React.FC = () => {
     setBadgesError(null);
     
     try {
-      const { data, error } = await BadgeService.fetchBadges();
+      const offset = (badgesPage - 1) * badgesPerPage;
+      
+      // Fetch badges with pagination
+      const { data, error } = await BadgeService.fetchBadges({
+        limit: badgesPerPage,
+        offset
+      });
       
       if (error) {
         setBadgesError(error);
         errorToast(`Failed to fetch badges: ${error}`);
       } else {
-        setBadges(data || []);
-        setBadgesTotalCount(data?.length || 0);
+        setBadges(data?.badges || []);
+        setBadgesTotalCount(data?.totalCount || 0);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
@@ -577,7 +639,7 @@ export const ContentManagement: React.FC = () => {
   const renderTrivia = () => (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold text-gray-900">Trivia Questions</h2>
+        <h2 className="text-xl font-bold text-gray-900">Trivia Games</h2>
         <div className="flex space-x-2">
           <button
             onClick={() => {
@@ -590,7 +652,7 @@ export const ContentManagement: React.FC = () => {
             <span>Add Question</span>
           </button>
           <button
-            onClick={fetchTriviaQuestions}
+            onClick={fetchTriviaGames}
             className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
           >
             Refresh
@@ -607,13 +669,13 @@ export const ContentManagement: React.FC = () => {
       {triviaLoading ? (
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-secondary-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading trivia questions...</p>
+          <p className="text-gray-600">Loading trivia games...</p>
         </div>
-      ) : triviaQuestions.length === 0 ? (
+      ) : triviaGames.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <Brain className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No trivia questions found</h3>
-          <p className="text-gray-600 mb-4">Add your first trivia question to get started.</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No trivia games found</h3>
+          <p className="text-gray-600 mb-4">Add your first trivia game to get started.</p>
           <button
             onClick={() => {
               setSelectedTriviaQuestion(null);
@@ -631,7 +693,7 @@ export const ContentManagement: React.FC = () => {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Question
+                    Game
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Category
@@ -640,10 +702,10 @@ export const ContentManagement: React.FC = () => {
                     Difficulty
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
+                    Questions
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created
+                    Points
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -651,55 +713,164 @@ export const ContentManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {triviaQuestions.map((question) => (
-                  <tr key={question.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">{question.question}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-accent-100 text-accent-700">
-                        {question.category}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        question.difficulty === 'easy' ? 'bg-success-100 text-success-700' :
-                        question.difficulty === 'medium' ? 'bg-warning-100 text-warning-700' :
-                        'bg-error-100 text-error-700'
-                      }`}>
-                        {question.difficulty}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-success-100 text-success-700">
-                        {question.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(question.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => {
-                            setSelectedTriviaQuestion(question);
-                            setShowAddEditTriviaModal(true);
-                          }}
-                          className="text-secondary-600 hover:text-secondary-900"
-                          title="Edit Question"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTriviaQuestion(question.id)}
-                          className="text-error-600 hover:text-error-900"
-                          title="Delete Question"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                {triviaGames.map((game) => (
+                  <React.Fragment key={game.id}>
+                    <tr className={`hover:bg-gray-50 ${expandedGameId === game.id ? 'bg-gray-50' : ''}`}>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <button 
+                            onClick={() => handleToggleGameExpand(game.id)}
+                            className="mr-2 text-gray-500 hover:text-gray-700"
+                          >
+                            {expandedGameId === game.id ? (
+                              <ChevronUp className="h-5 w-5" />
+                            ) : (
+                              <ChevronDown className="h-5 w-5" />
+                            )}
+                          </button>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{game.title}</div>
+                            {game.description && (
+                              <div className="text-xs text-gray-500">{game.description}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-accent-100 text-accent-700">
+                          {game.category}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          game.difficulty === 'easy' ? 'bg-success-100 text-success-700' :
+                          game.difficulty === 'medium' ? 'bg-warning-100 text-warning-700' :
+                          'bg-error-100 text-error-700'
+                        }`}>
+                          {game.difficulty}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {game.questionCount}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {game.pointsReward}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <button
+                            className="text-secondary-600 hover:text-secondary-900"
+                            title="Edit Game"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            className="text-error-600 hover:text-error-900"
+                            title="Delete Game"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    
+                    {/* Expanded Questions Section */}
+                    {expandedGameId === game.id && (
+                      <tr>
+                        <td colSpan={6} className="px-0 py-0 border-t-0">
+                          <div className="bg-gray-50 p-4">
+                            <div className="flex justify-between items-center mb-4">
+                              <h3 className="text-lg font-medium text-gray-900">Questions in this Game</h3>
+                              <button
+                                onClick={() => {
+                                  setSelectedTriviaQuestion(null);
+                                  setShowAddEditTriviaModal(true);
+                                }}
+                                className="bg-secondary-600 text-white px-3 py-1 rounded-lg hover:bg-secondary-700 transition-colors text-sm flex items-center space-x-1"
+                              >
+                                <Plus className="h-3 w-3" />
+                                <span>Add Question</span>
+                              </button>
+                            </div>
+                            
+                            {loadingGameQuestions === game.id ? (
+                              <div className="text-center py-6">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-secondary-600 mx-auto mb-2"></div>
+                                <p className="text-gray-600">Loading questions...</p>
+                              </div>
+                            ) : gameQuestionsMap[game.id]?.length === 0 ? (
+                              <div className="text-center py-6">
+                                <p className="text-gray-600">No questions found for this game.</p>
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full">
+                                  <thead className="bg-gray-100">
+                                    <tr>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Question
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Options
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Correct Answer
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Actions
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-200">
+                                    {gameQuestionsMap[game.id]?.map((question) => (
+                                      <tr key={question.id} className="hover:bg-gray-100">
+                                        <td className="px-4 py-3 text-sm">
+                                          {question.question}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm">
+                                          <ul className="list-disc list-inside">
+                                            {question.options.map((option, idx) => (
+                                              <li key={idx} className={idx === question.correct_answer ? 'font-bold' : ''}>
+                                                {option}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm">
+                                          {question.options[question.correct_answer]}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm">
+                                          <div className="flex space-x-2">
+                                            <button
+                                              onClick={() => {
+                                                setSelectedTriviaQuestion(question);
+                                                setShowAddEditTriviaModal(true);
+                                              }}
+                                              className="text-secondary-600 hover:text-secondary-900"
+                                              title="Edit Question"
+                                            >
+                                              <Edit className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                              onClick={() => handleDeleteTriviaQuestion(question.id)}
+                                              className="text-error-600 hover:text-error-900"
+                                              title="Delete Question"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -709,7 +880,7 @@ export const ContentManagement: React.FC = () => {
           {triviaTotalCount > triviaPerPage && (
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
               <div className="text-sm text-gray-700">
-                Showing {(triviaPage - 1) * triviaPerPage + 1} to {Math.min(triviaPage * triviaPerPage, triviaTotalCount)} of {triviaTotalCount} questions
+                Showing {(triviaPage - 1) * triviaPerPage + 1} to {Math.min(triviaPage * triviaPerPage, triviaTotalCount)} of {triviaTotalCount} games
               </div>
               <div className="flex space-x-2">
                 <button
@@ -745,7 +916,12 @@ export const ContentManagement: React.FC = () => {
         <AddEditTriviaModal
           isOpen={showAddEditTriviaModal}
           onClose={() => setShowAddEditTriviaModal(false)}
-          onSave={fetchTriviaQuestions}
+          onSave={() => {
+            fetchTriviaGames();
+            if (expandedGameId) {
+              fetchQuestionsForGame(expandedGameId);
+            }
+          }}
           question={selectedTriviaQuestion}
         />
       )}
@@ -803,58 +979,93 @@ export const ContentManagement: React.FC = () => {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {badges.map((badge) => (
-            <div
-              key={badge.id}
-              className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="bg-accent-100 p-3 rounded-lg">
-                  <div className="text-2xl">{badge.icon_url || '🏆'}</div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {badges.map((badge) => (
+              <div
+                key={badge.id}
+                className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="bg-accent-100 p-3 rounded-lg">
+                    <div className="text-2xl">{badge.icon_url || '🏆'}</div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => {
+                        setSelectedBadge(badge);
+                        setShowAddEditBadgeModal(true);
+                      }}
+                      className="text-primary-600 hover:text-primary-900"
+                      title="Edit Badge"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteBadge(badge.id)}
+                      className="text-error-600 hover:text-error-900"
+                      title="Delete Badge"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => {
-                      setSelectedBadge(badge);
-                      setShowAddEditBadgeModal(true);
-                    }}
-                    className="text-primary-600 hover:text-primary-900"
-                    title="Edit Badge"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteBadge(badge.id)}
-                    className="text-error-600 hover:text-error-900"
-                    title="Delete Badge"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{badge.name}</h3>
+                <p className="text-gray-600 text-sm mb-3">{badge.description}</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Criteria:</span>
+                    <span className="text-gray-900">
+                      {badge.criteria.type.replace('_', ' ')}
+                      {badge.criteria.count ? ` (${badge.criteria.count})` : ''}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Status:</span>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      badge.is_active ? 'bg-success-100 text-success-700' : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {badge.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">{badge.name}</h3>
-              <p className="text-gray-600 text-sm mb-3">{badge.description}</p>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Criteria:</span>
-                  <span className="text-gray-900">
-                    {badge.criteria.type.replace('_', ' ')}
-                    {badge.criteria.count ? ` (${badge.criteria.count})` : ''}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Status:</span>
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    badge.is_active ? 'bg-success-100 text-success-700' : 'bg-gray-100 text-gray-700'
-                  }`}>
-                    {badge.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
+            ))}
+          </div>
+          
+          {/* Pagination */}
+          {badgesTotalCount > badgesPerPage && (
+            <div className="mt-6 flex items-center justify-between bg-white px-6 py-4 border border-gray-200 rounded-lg">
+              <div className="text-sm text-gray-700">
+                Showing {(badgesPage - 1) * badgesPerPage + 1} to {Math.min(badgesPage * badgesPerPage, badgesTotalCount)} of {badgesTotalCount} badges
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setBadgesPage(prev => Math.max(prev - 1, 1))}
+                  disabled={badgesPage === 1}
+                  className={`p-2 rounded-md ${
+                    badgesPage === 1 
+                      ? 'text-gray-400 cursor-not-allowed' 
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => setBadgesPage(prev => prev + 1)}
+                  disabled={badgesPage * badgesPerPage >= badgesTotalCount}
+                  className={`p-2 rounded-md ${
+                    badgesPage * badgesPerPage >= badgesTotalCount
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
               </div>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
       
       {/* Add/Edit Badge Modal */}

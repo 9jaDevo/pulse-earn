@@ -12,7 +12,8 @@ import type {
   RedeemItemRequest,
   RedeemItemResult,
   RedeemedItem,
-  RewardStoreItem
+  RewardStoreItem,
+  TriviaGame
 } from '../types/api';
 
 export interface TriviaGameSummary {
@@ -182,15 +183,18 @@ export class RewardService {
       category?: string;
       difficulty?: string;
       country?: string;
+      limit?: number;
+      offset?: number;
     } = {}
   ): Promise<ServiceResponse<TriviaGameSummary[]>> {
     try {
-      const { category, difficulty, country } = options;
+      const { category, difficulty, country, limit = 10, offset = 0 } = options;
 
       // First try to fetch from trivia_games table
       let query = supabase.from('trivia_games')
         .select('*')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .range(offset, offset + limit - 1);
 
       if (category && category !== 'all') {
         query = query.eq('category', category);
@@ -371,29 +375,42 @@ export class RewardService {
   /**
    * Get trivia questions for a specific category and difficulty
    */
-  static async getTriviaQuestionsByGame(
-    category: string,
-    difficulty: string,
+  static async getTriviaQuestions(
     options: {
       limit?: number;
+      offset?: number;
+      category?: string;
+      difficulty?: string;
       country?: string;
+      isActive?: boolean;
     } = {}
   ): Promise<ServiceResponse<TriviaQuestion[]>> {
     try {
-      const { limit = 10, country } = options;
+      const { limit = 10, offset = 0, category, difficulty, country, isActive = true } = options;
 
       let query = supabase
         .from('trivia_questions')
         .select('*')
-        .eq('is_active', true)
-        .eq('category', category)
-        .eq('difficulty', difficulty)
-        .limit(limit);
+        .range(offset, offset + limit - 1);
+      
+      if (isActive !== undefined) {
+        query = query.eq('is_active', isActive);
+      }
 
-      if (country) {
-        query = query.or(`country.eq.${country},country.is.null`);
-      } else {
-        query = query.is('country', null);
+      if (category) {
+        query = query.eq('category', category);
+      }
+
+      if (difficulty) {
+        query = query.eq('difficulty', difficulty);
+      }
+
+      if (country !== undefined) {
+        if (country) {
+          query = query.eq('country', country);
+        } else {
+          query = query.is('country', null);
+        }
       }
 
       const { data, error } = await query;
@@ -761,244 +778,6 @@ export class RewardService {
   }
 
   /**
-   * Get trivia questions for admin management
-   */
-  static async getTriviaQuestions(
-    options: {
-      limit?: number;
-      category?: string;
-      difficulty?: 'easy' | 'medium' | 'hard';
-      country?: string;
-      isActive?: boolean;
-    } = {}
-  ): Promise<ServiceResponse<TriviaQuestion[]>> {
-    try {
-      const { limit = 100, category, difficulty, country, isActive } = options;
-
-      let query = supabase
-        .from('trivia_questions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      if (category) {
-        query = query.eq('category', category);
-      }
-
-      if (difficulty) {
-        query = query.eq('difficulty', difficulty);
-      }
-
-      if (country !== undefined) {
-        if (country === null) {
-          query = query.is('country', null);
-        } else {
-          query = query.eq('country', country);
-        }
-      }
-
-      if (isActive !== undefined) {
-        query = query.eq('is_active', isActive);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        return { data: null, error: error.message };
-      }
-
-      return { data: data || [], error: null };
-    } catch (error) {
-      return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Failed to get trivia questions'
-      };
-    }
-  }
-
-  /**
-   * Reset daily rewards for testing (admin only)
-   */
-  static async resetDailyRewards(userId: string): Promise<ServiceResponse<boolean>> {
-    try {
-      const { error } = await supabase
-        .from('user_daily_rewards')
-        .update({
-          last_spin_date: null,
-          last_trivia_date: null,
-          last_watch_date: null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userId);
-
-      if (error) {
-        return { data: null, error: error.message };
-      }
-
-      return { data: true, error: null };
-    } catch (error) {
-      return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Failed to reset daily rewards'
-      };
-    }
-  }
-
-  /**
-   * Redeem a store item for points
-   */
-  static async redeemStoreItem(
-    userId: string,
-    request: RedeemItemRequest
-  ): Promise<ServiceResponse<RedeemItemResult>> {
-    try {
-      // 1. Check if user has enough points
-      const { data: profile, error: profileError } = await ProfileService.fetchProfileById(userId);
-      
-      if (profileError || !profile) {
-        return { data: null, error: profileError || 'User profile not found' };
-      }
-      
-      if (profile.points < request.pointsCost) {
-        return { 
-          data: null, 
-          error: `Insufficient points. You have ${profile.points} points, but this item costs ${request.pointsCost} points.` 
-        };
-      }
-
-      // 2. Check if the item exists and is available
-      const { data: storeItem, error: storeItemError } = await supabase
-        .from('reward_store_items')
-        .select('*')
-        .eq('id', request.itemId)
-        .eq('is_active', true)
-        .single();
-
-      if (storeItemError) {
-        return { data: null, error: 'Item not found or no longer available' };
-      }
-
-      // 3. Check if there's enough stock
-      if (storeItem.stock_quantity !== null && storeItem.stock_quantity <= 0) {
-        return { data: null, error: 'This item is out of stock' };
-      }
-
-      // 4. Deduct points from user's profile
-      // Note: ProfileService.updateUserPoints adds points, so we pass a negative value to deduct
-      const { data: updatedProfile, error: pointsError } = await ProfileService.updateUserPoints(
-        userId,
-        -request.pointsCost // Deduct points
-      );
-
-      if (pointsError) {
-        return { data: null, error: pointsError };
-      }
-
-      if (!updatedProfile) {
-        return { data: null, error: 'Failed to update user points.' };
-      }
-
-      // 5. Record the redemption in the redeemed_items table
-      const { data: redeemedItemRecord, error: recordError } = await supabase
-        .from('redeemed_items')
-        .insert({
-          user_id: userId,
-          item_id: request.itemId,
-          item_name: request.itemName,
-          points_cost: request.pointsCost,
-          fulfillment_details: request.fulfillmentDetails || {},
-          status: 'pending_fulfillment' // Initial status
-        })
-        .select()
-        .single();
-
-      if (recordError) {
-        // If recording fails, attempt to refund the points
-        await ProfileService.updateUserPoints(userId, request.pointsCost);
-        return { data: null, error: recordError.message };
-      }
-
-      // 6. Update item stock if applicable
-      if (storeItem.stock_quantity !== null) {
-        await supabase
-          .from('reward_store_items')
-          .update({ 
-            stock_quantity: storeItem.stock_quantity - 1,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', request.itemId);
-      }
-
-      // 7. Record in reward history for tracking
-      await supabase
-        .from('daily_reward_history')
-        .insert({
-          user_id: userId,
-          reward_type: 'spin', // Using existing type as a workaround
-          points_earned: -request.pointsCost, // Negative to indicate points spent
-          reward_data: { 
-            redemption_type: 'store_item',
-            item_id: request.itemId,
-            item_name: request.itemName
-          }
-        });
-
-      const result: RedeemItemResult = {
-        success: true,
-        message: `Successfully redeemed ${request.itemName} for ${request.pointsCost} points!`,
-        newPointsBalance: updatedProfile.points,
-        redeemedItemId: redeemedItemRecord.id
-      };
-
-      return { data: result, error: null };
-    } catch (error) {
-      return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Failed to redeem item'
-      };
-    }
-  }
-
-  /**
-   * Get user's redeemed items
-   */
-  static async getRedeemedItems(
-    userId: string,
-    options: {
-      limit?: number;
-      status?: 'pending_fulfillment' | 'fulfilled' | 'cancelled';
-    } = {}
-  ): Promise<ServiceResponse<RedeemedItem[]>> {
-    try {
-      const { limit = 50, status } = options;
-
-      let query = supabase
-        .from('redeemed_items')
-        .select('*')
-        .eq('user_id', userId)
-        .order('redeemed_at', { ascending: false })
-        .limit(limit);
-
-      if (status) {
-        query = query.eq('status', status);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        return { data: null, error: error.message };
-      }
-
-      return { data: data || [], error: null };
-    } catch (error) {
-      return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Failed to get redeemed items'
-      };
-    }
-  }
-
-  /**
    * Get reward store items
    */
   static async getRewardStoreItems(
@@ -1169,6 +948,160 @@ export class RewardService {
       };
     }
   }
+
+  /**
+   * Get user's redeemed items
+   */
+  static async getRedeemedItems(
+    userId: string,
+    options: {
+      limit?: number;
+      status?: 'pending_fulfillment' | 'fulfilled' | 'cancelled';
+    } = {}
+  ): Promise<ServiceResponse<RedeemedItem[]>> {
+    try {
+      const { limit = 50, status } = options;
+
+      let query = supabase
+        .from('redeemed_items')
+        .select('*')
+        .eq('user_id', userId)
+        .order('redeemed_at', { ascending: false })
+        .limit(limit);
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      return { data: data || [], error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get redeemed items'
+      };
+    }
+  }
+
+  /**
+   * Redeem a store item for points
+   */
+  static async redeemStoreItem(
+    userId: string,
+    request: RedeemItemRequest
+  ): Promise<ServiceResponse<RedeemItemResult>> {
+    try {
+      // 1. Check if user has enough points
+      const { data: profile, error: profileError } = await ProfileService.fetchProfileById(userId);
+      
+      if (profileError || !profile) {
+        return { data: null, error: profileError || 'User profile not found' };
+      }
+      
+      if (profile.points < request.pointsCost) {
+        return { 
+          data: null, 
+          error: `Insufficient points. You have ${profile.points} points, but this item costs ${request.pointsCost} points.` 
+        };
+      }
+
+      // 2. Check if the item exists and is available
+      const { data: storeItem, error: storeItemError } = await supabase
+        .from('reward_store_items')
+        .select('*')
+        .eq('id', request.itemId)
+        .eq('is_active', true)
+        .single();
+
+      if (storeItemError) {
+        return { data: null, error: 'Item not found or no longer available' };
+      }
+
+      // 3. Check if there's enough stock
+      if (storeItem.stock_quantity !== null && storeItem.stock_quantity <= 0) {
+        return { data: null, error: 'This item is out of stock' };
+      }
+
+      // 4. Deduct points from user's profile
+      // Note: ProfileService.updateUserPoints adds points, so we pass a negative value to deduct
+      const { data: updatedProfile, error: pointsError } = await ProfileService.updateUserPoints(
+        userId,
+        -request.pointsCost // Deduct points
+      );
+
+      if (pointsError) {
+        return { data: null, error: pointsError };
+      }
+
+      if (!updatedProfile) {
+        return { data: null, error: 'Failed to update user points.' };
+      }
+
+      // 5. Record the redemption in the redeemed_items table
+      const { data: redeemedItemRecord, error: recordError } = await supabase
+        .from('redeemed_items')
+        .insert({
+          user_id: userId,
+          item_id: request.itemId,
+          item_name: request.itemName,
+          points_cost: request.pointsCost,
+          fulfillment_details: request.fulfillmentDetails || {},
+          status: 'pending_fulfillment' // Initial status
+        })
+        .select()
+        .single();
+
+      if (recordError) {
+        // If recording fails, attempt to refund the points
+        await ProfileService.updateUserPoints(userId, request.pointsCost);
+        return { data: null, error: recordError.message };
+      }
+
+      // 6. Update item stock if applicable
+      if (storeItem.stock_quantity !== null) {
+        await supabase
+          .from('reward_store_items')
+          .update({ 
+            stock_quantity: storeItem.stock_quantity - 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', request.itemId);
+      }
+
+      // 7. Record in reward history for tracking
+      await supabase
+        .from('daily_reward_history')
+        .insert({
+          user_id: userId,
+          reward_type: 'spin', // Using existing type as a workaround
+          points_earned: -request.pointsCost, // Negative to indicate points spent
+          reward_data: { 
+            redemption_type: 'store_item',
+            item_id: request.itemId,
+            item_name: request.itemName
+          }
+        });
+
+      const result: RedeemItemResult = {
+        success: true,
+        message: `Successfully redeemed ${request.itemName} for ${request.pointsCost} points!`,
+        newPointsBalance: updatedProfile.points,
+        redeemedItemId: redeemedItemRecord.id
+      };
+
+      return { data: result, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to redeem item'
+      };
+    }
+  }
 }
 
 // Export individual functions for backward compatibility and easier testing
@@ -1177,18 +1110,20 @@ export const {
   getDistinctTriviaCategories,
   getDistinctTriviaDifficulties,
   getTriviaGameSummaries,
-  getTriviaQuestionsByGame,
+  getTriviaQuestions,
   performSpin,
   getDailyTriviaQuestion,
   submitTriviaAnswer,
   recordAdWatch,
   getRewardHistory,
-  getTriviaQuestions,
   resetDailyRewards,
   redeemStoreItem,
   getRedeemedItems,
   getRewardStoreItems,
   createRewardStoreItem,
   updateRewardStoreItem,
-  updateRedemptionStatus
+  updateRedemptionStatus,
+  fetchTriviaGameById,
+  fetchTriviaQuestionsForGame,
+  submitTriviaGame
 } = RewardService;
