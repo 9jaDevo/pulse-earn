@@ -1,0 +1,2759 @@
+{
+  "info": {
+    "_postman_id": "your-collection-id",
+    "name": "PulseEarn API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Postman Collection for the PulseEarn mobile application API endpoints. This collection provides a comprehensive overview of the RESTful and RPC endpoints exposed by the Supabase backend, along with authentication and data management operations. \n\n**Setup:**\n1.  **Import this JSON** into Postman.\n2.  **Set Collection Variables**: Update `SUPABASE_URL` and `SUPABASE_ANON_KEY` with your Supabase project details. You can find these in your Supabase project settings under 'API'.\n3.  **Authentication**: Use the 'Auth' folder requests to sign up or sign in. The 'Sign In' request has a 'Tests' script that automatically sets the `AUTH_TOKEN` and `USER_ID` collection variables upon successful login. This token will then be used for all subsequent authenticated requests.\n\n**Headers:**\n*   `apikey`: `{{SUPABASE_ANON_KEY}}` (required for all Supabase API calls)\n*   `Authorization`: `Bearer {{AUTH_TOKEN}}` (required for authenticated endpoints)\n*   `Content-Type`: `application/json` (for requests with a body)\n*   `Prefer`: `return=representation` (for POST/PATCH requests to get the created/updated record back)\n\n**Note on RLS (Row Level Security):**\nSupabase enforces Row Level Security. Ensure your Supabase RLS policies are correctly configured for the roles and data access patterns required by your mobile application. Some operations might require 'admin' or 'moderator' roles, which are typically handled by backend functions or secure admin panels, not directly by the mobile app's public API."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{AUTH_TOKEN}}"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "SUPABASE_URL",
+      "value": "your_supabase_project_url",
+      "type": "string",
+      "description": "Your Supabase project URL (e.g., https://abcdefg.supabase.co)"
+    },
+    {
+      "key": "SUPABASE_ANON_KEY",
+      "value": "your_supabase_anon_key",
+      "type": "string",
+      "description": "Your Supabase public 'anon' key"
+    },
+    {
+      "key": "AUTH_TOKEN",
+      "value": "",
+      "type": "string",
+      "description": "Authentication token obtained after successful sign-in"
+    },
+    {
+      "key": "USER_ID",
+      "value": "",
+      "type": "string",
+      "description": "ID of the authenticated user"
+    },
+    {
+      "key": "poll_id",
+      "value": "",
+      "type": "string",
+      "description": "ID of a specific poll"
+    },
+    {
+      "key": "poll_slug",
+      "value": "",
+      "type": "string",
+      "description": "Slug of a specific poll"
+    },
+    {
+      "key": "comment_id",
+      "value": "",
+      "type": "string",
+      "description": "ID of a specific comment"
+    },
+    {
+      "key": "game_id",
+      "value": "",
+      "type": "string",
+      "description": "ID of a specific trivia game"
+    },
+    {
+      "key": "question_id",
+      "value": "",
+      "type": "string",
+      "description": "ID of a specific trivia question"
+    },
+    {
+      "key": "item_id",
+      "value": "",
+      "type": "string",
+      "description": "ID of a specific reward store item"
+    },
+    {
+      "key": "redemption_id",
+      "value": "",
+      "type": "string",
+      "description": "ID of a specific redeemed item"
+    },
+    {
+      "key": "badge_id",
+      "value": "",
+      "type": "string",
+      "description": "ID of a specific badge"
+    },
+    {
+      "key": "report_id",
+      "value": "",
+      "type": "string",
+      "description": "ID of a specific content report"
+    },
+    {
+      "key": "referral_code",
+      "value": "",
+      "type": "string",
+      "description": "A user's referral code"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Endpoints for user authentication (Sign Up, Sign In, Sign Out) and fetching user profiles.",
+      "item": [
+        {
+          "name": "Sign Up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"testuser@example.com\",\n    \"password\": \"password123\",\n    \"options\": {\n        \"data\": {\n            \"name\": \"Test User\",\n            \"country\": \"US\",\n            \"referred_by_code\": \"\"\n        }\n    }\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/auth/v1/signup",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "auth",
+                "v1",
+                "signup"
+              ]
+            },
+            "description": "Registers a new user. The `options.data` field is used to pass initial profile data (name, country, referral_code) which will be processed by a Supabase trigger to create the `profiles` entry."
+          },
+          "response": []
+        },
+        {
+          "name": "Sign In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"testuser@example.com\",\n    \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/auth/v1/token?grant_type=password",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "auth",
+                "v1",
+                "token"
+              ],
+              "query": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                }
+              ]
+            },
+            "description": "Authenticates a user with email and password. On success, a `session` object is returned containing the `access_token` (JWT) and `user` object. The `access_token` should be stored and used in the `Authorization` header for subsequent authenticated requests.",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "var jsonData = pm.response.json();",
+                    "if (jsonData.access_token) {",
+                    "    pm.collectionVariables.set(\"AUTH_TOKEN\", jsonData.access_token);",
+                    "    pm.collectionVariables.set(\"USER_ID\", jsonData.user.id);",
+                    "    console.log(\"Auth Token set: \" + jsonData.access_token);",
+                    "    console.log(\"User ID set: \" + jsonData.user.id);",
+                    "} else {",
+                    "    console.log(\"Sign in failed, no token received.\");",
+                    "}"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "Sign Out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/auth/v1/logout",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "auth",
+                "v1",
+                "logout"
+              ]
+            },
+            "description": "Invalidates the current user's session. Requires an `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/profiles?id=eq.{{USER_ID}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "profiles"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{USER_ID}}"
+                }
+              ]
+            },
+            "description": "Retrieves the profile details for the authenticated user. Requires `AUTH_TOKEN` and `USER_ID`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Profiles",
+      "description": "Endpoints for managing user profiles, including updates, points, and badges.",
+      "item": [
+        {
+          "name": "Update User Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Updated Name\",\n    \"country\": \"CA\",\n    \"avatar_url\": \"https://example.com/new_avatar.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/profiles?id=eq.{{USER_ID}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "profiles"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{USER_ID}}"
+                }
+              ]
+            },
+            "description": "Updates the authenticated user's profile. Requires `AUTH_TOKEN` and `USER_ID`. Only fields allowed by RLS policies can be updated by the user."
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch All Profiles (Leaderboard)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/profiles?order=points.desc&limit=10",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "profiles"
+              ],
+              "query": [
+                {
+                  "key": "order",
+                  "value": "points.desc"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Fetches a list of all profiles, typically for a leaderboard. Can be filtered by `role`, `country`, and ordered by `points` or `created_at`."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Points (Admin/Internal)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"points\": 1000\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/profiles?id=eq.{{USER_ID}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "profiles"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{USER_ID}}"
+                }
+              ]
+            },
+            "description": "Updates a user's points. This operation is typically restricted by RLS to admin roles or internal service calls. Requires `AUTH_TOKEN` (of an authorized user) and `USER_ID`."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Badge to User (Admin/Internal)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"badges\": [\"First Vote\", \"Quiz Master\"]\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/profiles?id=eq.{{USER_ID}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "profiles"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{USER_ID}}"
+                }
+              ]
+            },
+            "description": "Adds a badge to a user's profile. This operation is typically restricted by RLS to admin roles or internal service calls. Requires `AUTH_TOKEN` (of an authorized user) and `USER_ID`. Note: This overwrites the `badges` array, so you should fetch current badges first, add the new one, and then send the updated array."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Polls",
+      "description": "Endpoints for managing polls, categories, votes, and comments.",
+      "item": [
+        {
+          "name": "Get All Poll Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/poll_categories?is_active=eq.true",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "poll_categories"
+              ],
+              "query": [
+                {
+                  "key": "is_active",
+                  "value": "eq.true"
+                }
+              ]
+            },
+            "description": "Retrieves all active poll categories."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Poll Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"New Category Name\",\n    \"description\": \"Description for the new category\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/poll_categories",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "poll_categories"
+              ]
+            },
+            "description": "Creates a new poll category. Requires `AUTH_TOKEN` (of an authorized user, typically admin or moderator)."
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch Polls",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/polls?is_active=eq.true&order=created_at.desc&limit=10&offset=0",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "polls"
+              ],
+              "query": [
+                {
+                  "key": "is_active",
+                  "value": "eq.true"
+                },
+                {
+                  "key": "order",
+                  "value": "created_at.desc",
+                  "description": "Order by 'created_at' or 'total_votes'"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "type",
+                  "value": "eq.global",
+                  "description": "Filter by 'global' or 'country'",
+                  "disabled": true
+                },
+                {
+                  "key": "country",
+                  "value": "eq.US",
+                  "description": "Filter by country code (e.g., 'US')",
+                  "disabled": true
+                },
+                {
+                  "key": "category",
+                  "value": "eq.Science",
+                  "description": "Filter by category",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Fetches a list of active polls. Supports pagination, filtering by type, country, category, and ordering. Requires `AUTH_TOKEN` for user-specific vote status."
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch Poll by Slug",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/polls?slug=eq.{{poll_slug}}&is_active=eq.true",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "polls"
+              ],
+              "query": [
+                {
+                  "key": "slug",
+                  "value": "eq.{{poll_slug}}"
+                },
+                {
+                  "key": "is_active",
+                  "value": "eq.true"
+                }
+              ]
+            },
+            "description": "Retrieves details for a single poll using its unique slug. Requires `AUTH_TOKEN` for user-specific vote status."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Poll",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"What's your favorite programming language?\",\n    \"description\": \"Help us decide the most popular language in 2025!\",\n    \"options\": [\n        {\"text\": \"JavaScript\", \"votes\": 0},\n        {\"text\": \"Python\", \"votes\": 0},\n        {\"text\": \"Java\", \"votes\": 0},\n        {\"text\": \"Go\", \"votes\": 0}\n    ],\n    \"type\": \"global\",\n    \"country\": null,\n    \"category\": \"Technology\",\n    \"created_by\": \"{{USER_ID}}\",\n    \"slug\": \"whats-your-favorite-programming-language\",\n    \"active_until\": \"2025-12-31T23:59:59Z\",\n    \"start_date\": \"2025-06-27T00:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/polls",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "polls"
+              ]
+            },
+            "description": "Creates a new poll. Requires `AUTH_TOKEN`. The `slug` should be unique. `options` should be an array of objects with `text` and `votes` (initially 0). `created_by` should be the `USER_ID`."
+          },
+          "response": []
+        },
+        {
+          "name": "Vote on Poll (Insert Vote)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{USER_ID}}\",\n    \"poll_id\": \"{{poll_id}}\",\n    \"vote_option\": 0\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/poll_votes",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "poll_votes"
+              ]
+            },
+            "description": "Records a user's vote on a poll. `vote_option` is the 0-indexed position of the chosen option in the poll's `options` array. This is the first step of voting; the poll's `total_votes` and `options` array need to be updated separately (handled by client-side logic or database triggers)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Poll",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"Updated Poll Title\",\n    \"description\": \"New description for the poll\",\n    \"options\": [\n        {\"text\": \"Option A Updated\", \"votes\": 10},\n        {\"text\": \"Option B\", \"votes\": 5}\n    ],\n    \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/polls?id=eq.{{poll_id}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "polls"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{poll_id}}"
+                }
+              ]
+            },
+            "description": "Updates an existing poll. Requires `AUTH_TOKEN` (of the poll creator or an admin). Note: When updating `options`, ensure you send the full updated array including existing vote counts."
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Poll (RPC)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"p_poll_id\": \"{{poll_id}}\",\n    \"p_user_id\": \"{{USER_ID}}\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/rpc/archive_poll",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "archive_poll"
+              ]
+            },
+            "description": "Archives a poll by setting its `is_active` status to `false`. This uses a PostgreSQL RPC function. Requires `AUTH_TOKEN` (of the poll creator or an admin)."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Poll (RPC)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"p_poll_id\": \"{{poll_id}}\",\n    \"p_user_id\": \"{{USER_ID}}\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/rpc/restore_poll",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "restore_poll"
+              ]
+            },
+            "description": "Restores an archived poll by setting its `is_active` status to `true`. This uses a PostgreSQL RPC function. Requires `AUTH_TOKEN` (of the poll creator or an admin)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Poll Comments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/poll_comments?poll_id=eq.{{poll_id}}&is_active=eq.true&parent_comment_id=is.null&order=created_at.desc",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "poll_comments"
+              ],
+              "query": [
+                {
+                  "key": "poll_id",
+                  "value": "eq.{{poll_id}}"
+                },
+                {
+                  "key": "is_active",
+                  "value": "eq.true"
+                },
+                {
+                  "key": "parent_comment_id",
+                  "value": "is.null",
+                  "description": "To get top-level comments. Remove for all comments."
+                },
+                {
+                  "key": "order",
+                  "value": "created_at.desc"
+                }
+              ]
+            },
+            "description": "Retrieves comments for a specific poll. Can filter for top-level comments (`parent_comment_id=is.null`) or all comments. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Poll Comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"poll_id\": \"{{poll_id}}\",\n    \"user_id\": \"{{USER_ID}}\",\n    \"comment_text\": \"This is a new comment on the poll.\",\n    \"parent_comment_id\": null\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/poll_comments",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "poll_comments"
+              ]
+            },
+            "description": "Creates a new comment on a poll. Set `parent_comment_id` for replies. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Poll Comment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"comment_text\": \"This comment has been updated.\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/poll_comments?id=eq.{{comment_id}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "poll_comments"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{comment_id}}"
+                }
+              ]
+            },
+            "description": "Updates an existing poll comment. Requires `AUTH_TOKEN` (of the comment creator or an admin/moderator)."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Poll Comment (Soft Delete)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"is_active\": false\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/poll_comments?id=eq.{{comment_id}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "poll_comments"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{comment_id}}"
+                }
+              ]
+            },
+            "description": "Soft deletes a poll comment by setting `is_active` to `false`. Requires `AUTH_TOKEN` (of the comment creator or an admin/moderator)."
+          },
+          "response": []
+        },
+        {
+          "name": "Report Content (Poll or Comment)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"reporter_id\": \"{{USER_ID}}\",\n    \"content_type\": \"poll\",\n    \"content_id\": \"{{poll_id}}\",\n    \"reason\": \"Inappropriate content\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/content_reports",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "content_reports"
+              ]
+            },
+            "description": "Reports inappropriate content (poll or comment). `content_type` can be 'poll' or 'comment'. `content_id` should be the ID of the reported content. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Rewards",
+      "description": "Endpoints for daily rewards (Spin & Win, Trivia, Watch Ads), reward store, and redemption history.",
+      "item": [
+        {
+          "name": "Get Daily Reward Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/user_daily_rewards?user_id=eq.{{USER_ID}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "user_daily_rewards"
+              ],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "eq.{{USER_ID}}"
+                }
+              ]
+            },
+            "description": "Retrieves the current daily reward status for the authenticated user, indicating if they can perform daily activities (spin, trivia, watch ad). Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Distinct Trivia Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/trivia_questions?select=category&distinct=true",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "trivia_questions"
+              ],
+              "query": [
+                {
+                  "key": "select",
+                  "value": "category"
+                },
+                {
+                  "key": "distinct",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Retrieves all distinct categories available for trivia questions."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Distinct Trivia Difficulties",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/trivia_questions?select=difficulty&distinct=true",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "trivia_questions"
+              ],
+              "query": [
+                {
+                  "key": "select",
+                  "value": "difficulty"
+                },
+                {
+                  "key": "distinct",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Retrieves all distinct difficulties available for trivia questions."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Trivia Game Summaries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/trivia_games?is_active=eq.true&limit=10&offset=0",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "trivia_games"
+              ],
+              "query": [
+                {
+                  "key": "is_active",
+                  "value": "eq.true"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "category",
+                  "value": "eq.Science",
+                  "disabled": true
+                },
+                {
+                  "key": "difficulty",
+                  "value": "eq.easy",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieves summaries of available trivia games. Supports filtering by category and difficulty, and pagination."
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch Trivia Game by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/trivia_games?id=eq.{{game_id}}&is_active=eq.true",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "trivia_games"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{game_id}}"
+                },
+                {
+                  "key": "is_active",
+                  "value": "eq.true"
+                }
+              ]
+            },
+            "description": "Retrieves details for a specific trivia game by its ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch Trivia Questions for Game",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/trivia_questions?id=in.({{question_id_1}},{{question_id_2}})&is_active=eq.true",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "trivia_questions"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "in.({{question_id_1}},{{question_id_2}})",
+                  "description": "Comma-separated list of question IDs from the `trivia_games.question_ids` array."
+                },
+                {
+                  "key": "is_active",
+                  "value": "eq.true"
+                }
+              ]
+            },
+            "description": "Retrieves a list of trivia questions belonging to a specific game, using the `question_ids` array from the `trivia_games` table."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Trivia Questions (Filtered)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/trivia_questions?is_active=eq.true&limit=1&category=eq.Science&difficulty=eq.easy",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "trivia_questions"
+              ],
+              "query": [
+                {
+                  "key": "is_active",
+                  "value": "eq.true"
+                },
+                {
+                  "key": "limit",
+                  "value": "1"
+                },
+                {
+                  "key": "category",
+                  "value": "eq.Science",
+                  "description": "Filter by category",
+                  "disabled": false
+                },
+                {
+                  "key": "difficulty",
+                  "value": "eq.easy",
+                  "description": "Filter by difficulty (easy, medium, hard)",
+                  "disabled": false
+                },
+                {
+                  "key": "country",
+                  "value": "eq.US",
+                  "description": "Filter by country (or `is.null` for global questions)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieves trivia questions based on category, difficulty, and country. Can be used to fetch a daily question or questions for a game."
+          },
+          "response": []
+        },
+        {
+          "name": "Perform Spin (Multi-step)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{USER_ID}}\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/rpc/perform_spin",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "perform_spin"
+              ]
+            },
+            "description": "This is a conceptual representation of the 'Perform Spin' operation. In the actual application, this involves:\n1.  Checking daily spin status.\n2.  Calculating spin result (points or 'try again').\n3.  Updating `user_daily_rewards` (last_spin_date, streak, total_spins).\n4.  Updating `profiles` (points).\n5.  Recording in `daily_reward_history`.\n\nThis RPC call would encapsulate these steps if a single database function were used. Otherwise, it's a sequence of API calls from the client."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Trivia Answer (Multi-step)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{USER_ID}}\",\n    \"question_id\": \"{{question_id}}\",\n    \"selected_answer\": 0\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/rpc/submit_trivia_answer",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "submit_trivia_answer"
+              ]
+            },
+            "description": "This is a conceptual representation of the 'Submit Trivia Answer' operation. In the actual application, this involves:\n1.  Checking daily trivia status.\n2.  Validating the answer against the question.\n3.  Calculating points based on correctness and difficulty.\n4.  Updating `user_daily_rewards` (last_trivia_date, streak, total_trivia_completed).\n5.  Updating `profiles` (points).\n6.  Recording in `daily_reward_history`.\n\nThis RPC call would encapsulate these steps if a single database function were used. Otherwise, it's a sequence of API calls from the client."
+          },
+          "response": []
+        },
+        {
+          "name": "Record Ad Watch (Multi-step)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{USER_ID}}\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/rpc/record_ad_watch",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "record_ad_watch"
+              ]
+            },
+            "description": "This is a conceptual representation of the 'Record Ad Watch' operation. In the actual application, this involves:\n1.  Checking daily ad watch status.\n2.  Awarding fixed points.\n3.  Updating `user_daily_rewards` (last_watch_date, total_ads_watched).\n4.  Updating `profiles` (points).\n5.  Recording in `daily_reward_history`.\n\nThis RPC call would encapsulate these steps if a single database function were used. Otherwise, it's a sequence of API calls from the client."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Reward History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/daily_reward_history?user_id=eq.{{USER_ID}}&order=created_at.desc&limit=10",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "daily_reward_history"
+              ],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "eq.{{USER_ID}}"
+                },
+                {
+                  "key": "order",
+                  "value": "created_at.desc"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "reward_type",
+                  "value": "eq.spin",
+                  "description": "Filter by 'spin', 'trivia', or 'watch'",
+                  "disabled": true
+                },
+                {
+                  "key": "start_date",
+                  "value": "gte.2025-01-01",
+                  "description": "Filter by start date",
+                  "disabled": true
+                },
+                {
+                  "key": "end_date",
+                  "value": "lte.2025-01-31",
+                  "description": "Filter by end date",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieves the authenticated user's daily reward history. Supports filtering by reward type and date range. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Reward Store Items",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/reward_store_items?is_active=eq.true&order=points_cost.asc",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "reward_store_items"
+              ],
+              "query": [
+                {
+                  "key": "is_active",
+                  "value": "eq.true"
+                },
+                {
+                  "key": "order",
+                  "value": "points_cost.asc"
+                },
+                {
+                  "key": "item_type",
+                  "value": "eq.gift_card",
+                  "description": "Filter by 'gift_card', 'subscription_code', 'paypal_payout', 'bank_transfer', 'physical_item'",
+                  "disabled": true
+                },
+                {
+                  "key": "minPoints",
+                  "value": "gte.100",
+                  "description": "Filter by minimum points cost",
+                  "disabled": true
+                },
+                {
+                  "key": "maxPoints",
+                  "value": "lte.1000",
+                  "description": "Filter by maximum points cost",
+                  "disabled": true
+                },
+                {
+                  "key": "inStock",
+                  "value": "or(stock_quantity.gt.0,stock_quantity.is.null)",
+                  "description": "Filter for items in stock or unlimited stock",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieves available items in the reward store. Supports filtering by item type, points cost range, and stock availability. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Redeem Store Item (Multi-step)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{USER_ID}}\",\n    \"item_id\": \"{{item_id}}\",\n    \"item_name\": \"Amazon Gift Card\",\n    \"points_cost\": 1000,\n    \"fulfillment_details\": {\n        \"redeemedBy\": \"{{USER_ID}}\",\n        \"redeemedAt\": \"2025-06-27T12:00:00Z\",\n        \"itemType\": \"gift_card\"\n    }\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/rpc/redeem_store_item",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "redeem_store_item"
+              ]
+            },
+            "description": "This is a conceptual representation of the 'Redeem Store Item' operation. In the actual application, this involves:\n1.  Checking user points and item availability/stock.\n2.  Deducting points from `profiles`.\n3.  Recording the redemption in `redeemed_items`.\n4.  Updating `reward_store_items` stock.\n5.  Recording in `daily_reward_history`.\n\nThis RPC call would encapsulate these steps if a single database function were used. Otherwise, it's a sequence of API calls from the client."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Redeemed Items",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/redeemed_items?user_id=eq.{{USER_ID}}&order=redeemed_at.desc",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "redeemed_items"
+              ],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "eq.{{USER_ID}}"
+                },
+                {
+                  "key": "order",
+                  "value": "redeemed_at.desc"
+                },
+                {
+                  "key": "status",
+                  "value": "eq.pending_fulfillment",
+                  "description": "Filter by 'pending_fulfillment', 'fulfilled', or 'cancelled'",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieves the authenticated user's redeemed items history. Supports filtering by status. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Reward Store Item (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"New Gift Card\",\n    \"description\": \"A $10 gift card for online shopping\",\n    \"item_type\": \"gift_card\",\n    \"points_cost\": 1000,\n    \"value\": \"$10\",\n    \"currency\": \"USD\",\n    \"image_url\": \"🎁\",\n    \"fulfillment_instructions\": \"Code will be sent to your email within 24 hours.\",\n    \"is_active\": true,\n    \"stock_quantity\": 100\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/reward_store_items",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "reward_store_items"
+              ]
+            },
+            "description": "Creates a new item in the reward store. Requires `AUTH_TOKEN` (of an admin user)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Reward Store Item (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"points_cost\": 950,\n    \"stock_quantity\": 99\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/reward_store_items?id=eq.{{item_id}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "reward_store_items"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{item_id}}"
+                }
+              ]
+            },
+            "description": "Updates an existing item in the reward store. Requires `AUTH_TOKEN` (of an admin user)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Redemption Status (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"fulfilled\",\n    \"fulfillment_details\": {\n        \"giftCardCode\": \"ABC-123-XYZ\"\n    }\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/redeemed_items?id=eq.{{redemption_id}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "redeemed_items"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{redemption_id}}"
+                }
+              ]
+            },
+            "description": "Updates the status of a redeemed item (e.g., to 'fulfilled' or 'cancelled'). `fulfillment_details` can be updated with relevant information. Requires `AUTH_TOKEN` (of an admin user)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Badges",
+      "description": "Endpoints for managing badges and user badge progress.",
+      "item": [
+        {
+          "name": "Fetch All Badges",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/badges?is_active=eq.true&order=created_at.asc",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "badges"
+              ],
+              "query": [
+                {
+                  "key": "is_active",
+                  "value": "eq.true"
+                },
+                {
+                  "key": "order",
+                  "value": "created_at.asc"
+                }
+              ]
+            },
+            "description": "Retrieves all active badges. Supports pagination."
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch Badge by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/badges?id=eq.{{badge_id}}&is_active=eq.true",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "badges"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{badge_id}}"
+                },
+                {
+                  "key": "is_active",
+                  "value": "eq.true"
+                }
+              ]
+            },
+            "description": "Retrieves details for a specific badge by its ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Badge (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"First Poll Vote\",\n    \"description\": \"Awarded for casting your first vote in a poll.\",\n    \"icon_url\": \"👍\",\n    \"criteria\": {\n        \"type\": \"poll_votes\",\n        \"count\": 1\n    },\n    \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/badges",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "badges"
+              ]
+            },
+            "description": "Creates a new badge. Requires `AUTH_TOKEN` (of an admin user). `criteria` defines how the badge is earned."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Badge (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"description\": \"Updated description for the badge.\",\n    \"is_active\": false\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/badges?id=eq.{{badge_id}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "badges"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{badge_id}}"
+                }
+              ]
+            },
+            "description": "Updates an existing badge. Requires `AUTH_TOKEN` (of an admin user)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Moderation",
+      "description": "Endpoints for content moderation, including recording actions and managing reports.",
+      "item": [
+        {
+          "name": "Record Moderator Action",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"moderator_id\": \"{{USER_ID}}\",\n    \"action_type\": \"poll_removed\",\n    \"target_id\": \"{{poll_id}}\",\n    \"target_table\": \"polls\",\n    \"reason\": \"Violates community guidelines\",\n    \"metadata\": {\"details\": \"Inappropriate language\"}\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/moderator_actions",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "moderator_actions"
+              ]
+            },
+            "description": "Records an action performed by a moderator. Requires `AUTH_TOKEN` (of a moderator or admin user)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Moderator Actions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/moderator_actions?order=created_at.desc&limit=10",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "moderator_actions"
+              ],
+              "query": [
+                {
+                  "key": "order",
+                  "value": "created_at.desc"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "moderator_id",
+                  "value": "eq.{{USER_ID}}",
+                  "description": "Filter by specific moderator ID",
+                  "disabled": true
+                },
+                {
+                  "key": "action_type",
+                  "value": "eq.ban",
+                  "description": "Filter by action type (e.g., 'ban', 'approve')",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieves a list of moderator actions. Can be filtered by moderator ID, action type, and date range. Requires `AUTH_TOKEN` (of a moderator or admin user)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Content Reports",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/content_reports?order=created_at.desc&limit=10&status=eq.pending",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "content_reports"
+              ],
+              "query": [
+                {
+                  "key": "order",
+                  "value": "created_at.desc"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "eq.pending",
+                  "description": "Filter by 'pending', 'reviewed', 'resolved', 'rejected'"
+                },
+                {
+                  "key": "content_type",
+                  "value": "eq.poll",
+                  "description": "Filter by 'poll' or 'comment'",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieves a list of content reports. Supports filtering by status and content type. Requires `AUTH_TOKEN` (of a moderator or admin user)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Report Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"resolved\",\n    \"resolved_by\": \"{{USER_ID}}\",\n    \"resolution_notes\": \"Content reviewed and action taken.\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/content_reports?id=eq.{{report_id}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "content_reports"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "eq.{{report_id}}"
+                }
+              ]
+            },
+            "description": "Updates the status of a content report. Requires `AUTH_TOKEN` (of a moderator or admin user). `resolved_by` should be the moderator's ID."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Ambassador Program",
+      "description": "Endpoints related to the ambassador program, including details, metrics, and referrals.",
+      "item": [
+        {
+          "name": "Get Ambassador Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/ambassadors?user_id=eq.{{USER_ID}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "ambassadors"
+              ],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "eq.{{USER_ID}}"
+                }
+              ]
+            },
+            "description": "Retrieves ambassador details for a specific user. Requires `AUTH_TOKEN` (of the ambassador or an admin)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Country Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/country_metrics?country=eq.US&order=metric_date.desc&limit=7",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "country_metrics"
+              ],
+              "query": [
+                {
+                  "key": "country",
+                  "value": "eq.US"
+                },
+                {
+                  "key": "order",
+                  "value": "metric_date.desc"
+                },
+                {
+                  "key": "limit",
+                  "value": "7"
+                },
+                {
+                  "key": "start_date",
+                  "value": "gte.2025-06-01",
+                  "description": "Filter by start date",
+                  "disabled": true
+                },
+                {
+                  "key": "end_date",
+                  "value": "lte.2025-06-30",
+                  "description": "Filter by end date",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieves country-specific metrics (e.g., ad revenue, user count). Requires `AUTH_TOKEN` (of an ambassador for their country, or an admin)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Ambassador (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"commission_rate\": 20.00,\n    \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/ambassadors?user_id=eq.{{USER_ID}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "ambassadors"
+              ],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "eq.{{USER_ID}}"
+                }
+              ]
+            },
+            "description": "Updates an ambassador's details. Requires `AUTH_TOKEN` (of an admin user)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Ambassadors (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/ambassadors?order=total_earnings.desc&limit=10",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "ambassadors"
+              ],
+              "query": [
+                {
+                  "key": "order",
+                  "value": "total_earnings.desc"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "country",
+                  "value": "eq.US",
+                  "disabled": true
+                },
+                {
+                  "key": "is_active",
+                  "value": "eq.true",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieves a list of all ambassadors. Supports filtering and ordering. Requires `AUTH_TOKEN` (of an admin user)."
+          },
+          "response": []
+        },
+        {
+          "name": "Record Referral (Admin/Internal)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"total_referrals\": 1,\n    \"total_earnings\": 10.50\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/ambassadors?user_id=eq.{{USER_ID}}",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "ambassadors"
+              ],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "eq.{{USER_ID}}"
+                }
+              ]
+            },
+            "description": "Records a new referral and updates ambassador's total referrals and earnings. This is typically an internal operation triggered by a new user signup with a referral code. Requires `AUTH_TOKEN` (of an admin user)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Referral System",
+      "description": "Endpoints for referral statistics, history, and referred users.",
+      "item": [
+        {
+          "name": "Get Referral Stats (RPC)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{USER_ID}}\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/rpc/get_referral_stats",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "get_referral_stats"
+              ]
+            },
+            "description": "Retrieves referral statistics for a specific user (total referrals, total earned from referrals, recent referrals). This uses a PostgreSQL RPC function. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Referral History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/daily_reward_history?user_id=eq.{{USER_ID}}&reward_type=in.(referral_signup,referral_bonus)&order=created_at.desc",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "daily_reward_history"
+              ],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "eq.{{USER_ID}}"
+                },
+                {
+                  "key": "reward_type",
+                  "value": "in.(referral_signup,referral_bonus)"
+                },
+                {
+                  "key": "order",
+                  "value": "created_at.desc"
+                }
+              ]
+            },
+            "description": "Retrieves the referral history (signups and bonuses) for the authenticated user. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Validate Referral Code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/profiles?referral_code=eq.{{referral_code}}&select=id,name",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "profiles"
+              ],
+              "query": [
+                {
+                  "key": "referral_code",
+                  "value": "eq.{{referral_code}}"
+                },
+                {
+                  "key": "select",
+                  "value": "id,name"
+                }
+              ]
+            },
+            "description": "Validates a referral code and returns the referrer's ID and name if valid. Does not require `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Referred Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/profiles?referred_by=eq.{{USER_ID}}&select=id,name,email,points,created_at&order=created_at.desc",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "profiles"
+              ],
+              "query": [
+                {
+                  "key": "referred_by",
+                  "value": "eq.{{USER_ID}}"
+                },
+                {
+                  "key": "select",
+                  "value": "id,name,email,points,created_at"
+                },
+                {
+                  "key": "order",
+                  "value": "created_at.desc"
+                }
+              ]
+            },
+            "description": "Retrieves a list of users who were referred by the authenticated user. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Referral Leaderboard (RPC)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"query\": \"SELECT p1.id, p1.name, COUNT(p2.id)::INTEGER as referral_count, COALESCE(SUM(drh.points_earned), 0)::INTEGER as total_earned FROM profiles p1 LEFT JOIN profiles p2 ON p1.id = p2.referred_by LEFT JOIN daily_reward_history drh ON p1.id = drh.user_id AND drh.reward_type = 'referral_bonus' WHERE p1.referral_code IS NOT NULL GROUP BY p1.id, p1.name HAVING COUNT(p2.id) > 0 ORDER BY referral_count DESC, total_earned DESC LIMIT 10\"\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/rpc/execute_sql",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "execute_sql"
+              ]
+            },
+            "description": "Retrieves a leaderboard of referrers based on referral count and earnings. This uses a custom SQL query executed via a PostgreSQL RPC function. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "description": "Endpoints for managing application settings.",
+      "item": [
+        {
+          "name": "Get Settings by Category",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/app_settings?category=eq.general",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "app_settings"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "eq.general",
+                  "description": "Category of settings (e.g., 'general', 'security', 'notifications', 'integrations', 'points')"
+                }
+              ]
+            },
+            "description": "Retrieves application settings for a specific category. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Settings (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"settings\": {\n        \"platformName\": \"PulseEarn Pro\",\n        \"defaultTheme\": \"dark\"\n    }\n}"
+            },
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/app_settings?category=eq.general",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "app_settings"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "eq.general"
+                }
+              ]
+            },
+            "description": "Updates application settings for a specific category. Requires `AUTH_TOKEN` (of an admin user). The `settings` field is a JSONB object."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{SUPABASE_ANON_KEY}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SUPABASE_URL}}/rest/v1/app_settings",
+              "host": [
+                "{{SUPABASE_URL}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "app_settings"
+              ]
+            },
+            "description": "Retrieves all application settings across all categories. Requires `AUTH_TOKEN`."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
