@@ -11,7 +11,8 @@ import type {
   TriviaSubmission,
   RedeemItemRequest,
   RedeemItemResult,
-  RedeemedItem
+  RedeemedItem,
+  RewardStoreItem
 } from '../types/api';
 
 /**
@@ -215,6 +216,34 @@ export const useRewards = (userId?: string) => {
     }
   };
 
+  const getRewardStoreItems = async (options: {
+    limit?: number;
+    itemType?: string;
+    minPoints?: number;
+    maxPoints?: number;
+    inStock?: boolean;
+  } = {}): Promise<{ success: boolean; data?: RewardStoreItem[]; error?: string }> => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { data, error: serviceError } = await RewardService.getRewardStoreItems(options);
+      
+      if (serviceError) {
+        setError(serviceError);
+        return { success: false, error: serviceError };
+      }
+      
+      return { success: true, data: data || [] };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to get reward store items';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (userId) {
       fetchStatus(userId);
@@ -235,6 +264,7 @@ export const useRewards = (userId?: string) => {
     getHistory,
     redeemStoreItem,
     fetchRedeemedItems,
+    getRewardStoreItems,
     refetch: () => userId && fetchStatus(userId)
   };
 };
