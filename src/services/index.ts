@@ -1,7 +1,9 @@
 /**
  * Services Index
  * 
- * Centralized export for all service modules
+ * This file exports all service modules for easy importing.
+ * When adding new services (polls, trivia, rewards, etc.), 
+ * export them from this file to maintain a clean import structure.
  */
 
 export { ProfileService } from './profileService';
@@ -11,7 +13,6 @@ export { BadgeService } from './badgeService';
 export { ModerationService } from './moderationService';
 export { AmbassadorService } from './ambassadorService';
 export { ReferralService } from './referralService';
-export { AdminService } from './adminService';
 export type { ServiceResponse } from './profileService';
 
 // Future service exports will go here:

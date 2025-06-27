@@ -10,38 +10,3 @@
 .animate-enter {
   animation: enter 0.4s cubic-bezier(0.21, 1.02, 0.73, 1) forwards;
 }
-
-/* Dark mode styles */
-.dark {
-  color-scheme: dark;
-}
-
-/* Custom scrollbar */
-@media (min-width: 768px) {
-  ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  ::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-gray-800;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 dark:bg-gray-600 rounded-full;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-400 dark:bg-gray-500;
-  }
-}
-
-/* Smooth transitions for theme changes */
-.transition-theme {
-  @apply transition-colors duration-200;
-}
-
-/* Gradient text that works in both light and dark modes */
-.gradient-text {
-  @apply bg-gradient-to-r from-primary-600 to-secondary-600 dark:from-primary-400 dark:to-secondary-400 bg-clip-text text-transparent;
-}

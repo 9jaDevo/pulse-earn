@@ -149,28 +149,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (email: string, password: string) => {
     setLoading(true)
     try {
-      const { error, data } = await supabase.auth.signInWithPassword({ email, password })
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
 
       if (error) {
-        // clear a bad/expired token if that's the issue
+        // clear a bad/expired token if that’s the issue
         if (/expired|invalid/.test(error.message)) {
           await supabase.auth.signOut()
         }
         errorToast('Invalid credentials or session expired.')
         setLoading(false)
         return { error }
-      }
-
-      // Check if user is suspended
-      if (data.user) {
-        const { data: userProfile } = await ProfileService.fetchProfileById(data.user.id)
-        if (userProfile?.is_suspended) {
-          // Sign out the user immediately
-          await supabase.auth.signOut()
-          errorToast('Your account has been suspended. Please contact support for assistance.')
-          setLoading(false)
-          return { error: { message: 'Account suspended' } }
-        }
       }
 
       successToast('Welcome back! You are now signed in.')

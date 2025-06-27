@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { RewardService } from '../services/rewardService';
-import { BadgeService } from '../services/badgeService';
 import type {
   DailyRewardStatus,
   SpinResult,
@@ -8,11 +7,7 @@ import type {
   TriviaResult,
   AdWatchResult,
   DailyRewardHistory,
-  TriviaSubmission,
-  RedeemItemRequest,
-  RedeemItemResult,
-  RedeemedItem,
-  RewardStoreItem
+  TriviaSubmission
 } from '../types/api';
 
 /**
@@ -26,7 +21,6 @@ export const useRewards = (userId?: string) => {
   const [status, setStatus] = useState<DailyRewardStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [redeemedItems, setRedeemedItems] = useState<RedeemedItem[]>([]);
 
   const fetchStatus = async (id: string) => {
     setLoading(true);
@@ -60,13 +54,6 @@ export const useRewards = (userId?: string) => {
     } else {
       // Refresh status after spin
       await fetchStatus(userId);
-      
-      // Check for jackpot badge
-      if (data && data.points === 250) {
-        // This is a jackpot spin, check for badge
-        await BadgeService.checkAndAwardBadges(userId);
-      }
-      
       setLoading(false);
       return { success: true, result: data };
     }
@@ -109,10 +96,6 @@ export const useRewards = (userId?: string) => {
     } else {
       // Refresh status after trivia
       await fetchStatus(userId);
-      
-      // Check for trivia-related badges
-      await BadgeService.checkAndAwardBadges(userId);
-      
       setLoading(false);
       return { success: true, result: data };
     }
@@ -135,10 +118,6 @@ export const useRewards = (userId?: string) => {
     } else {
       // Refresh status after ad watch
       await fetchStatus(userId);
-      
-      // Check for ad-related badges
-      await BadgeService.checkAndAwardBadges(userId);
-      
       setLoading(false);
       return { success: true, result: data };
     }
@@ -169,91 +148,14 @@ export const useRewards = (userId?: string) => {
     }
   };
 
-  const redeemStoreItem = async (request: RedeemItemRequest): Promise<{ success: boolean; result?: RedeemItemResult; error?: string }> => {
-    if (!userId) {
-      return { success: false, error: 'No user ID provided' };
-    }
-
-    setLoading(true);
-    setError(null);
-    
-    const { data, error: serviceError } = await RewardService.redeemStoreItem(userId, request);
-    
-    if (serviceError) {
-      setError(serviceError);
-      setLoading(false);
-      return { success: false, error: serviceError };
-    } else {
-      // Refresh redeemed items after redemption
-      await fetchRedeemedItems();
-      
-      setLoading(false);
-      return { success: true, result: data };
-    }
-  };
-
-  const fetchRedeemedItems = async (options: {
-    limit?: number;
-    status?: 'pending_fulfillment' | 'fulfilled' | 'cancelled';
-  } = {}): Promise<{ success: boolean; items?: RedeemedItem[]; error?: string }> => {
-    if (!userId) {
-      return { success: false, error: 'No user ID provided' };
-    }
-
-    setLoading(true);
-    setError(null);
-    
-    const { data, error: serviceError } = await RewardService.getRedeemedItems(userId, options);
-    
-    if (serviceError) {
-      setError(serviceError);
-      setLoading(false);
-      return { success: false, error: serviceError };
-    } else {
-      setRedeemedItems(data || []);
-      setLoading(false);
-      return { success: true, items: data };
-    }
-  };
-
-  const getRewardStoreItems = async (options: {
-    limit?: number;
-    itemType?: string;
-    minPoints?: number;
-    maxPoints?: number;
-    inStock?: boolean;
-  } = {}): Promise<{ success: boolean; data?: RewardStoreItem[]; error?: string }> => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const { data, error: serviceError } = await RewardService.getRewardStoreItems(options);
-      
-      if (serviceError) {
-        setError(serviceError);
-        return { success: false, error: serviceError };
-      }
-      
-      return { success: true, data: data || [] };
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to get reward store items';
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (userId) {
       fetchStatus(userId);
-      fetchRedeemedItems();
     }
   }, [userId]);
 
   return {
     status,
-    redeemedItems,
     loading,
     error,
     fetchStatus: () => userId && fetchStatus(userId),
@@ -262,9 +164,6 @@ export const useRewards = (userId?: string) => {
     submitTriviaAnswer,
     watchAd,
     getHistory,
-    redeemStoreItem,
-    fetchRedeemedItems,
-    getRewardStoreItems,
     refetch: () => userId && fetchStatus(userId)
   };
 };

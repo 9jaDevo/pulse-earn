@@ -9,8 +9,7 @@ import {
   Edit,
   Trash2,
   Eye,
-  EyeOff,
-  Tag
+  EyeOff
 } from 'lucide-react';
 import { PollService } from '../../services/pollService';
 import type { PollCategory } from '../../types/api';

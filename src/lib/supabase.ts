@@ -42,7 +42,6 @@ export type Database = {
           referred_by: string | null;
           created_at: string;
           updated_at: string;
-          is_suspended: boolean;
         };
         Insert: {
           id: string;
@@ -57,7 +56,6 @@ export type Database = {
           referred_by?: string | null;
           created_at?: string;
           updated_at?: string;
-          is_suspended?: boolean;
         };
         Update: {
           id?: string;
@@ -72,7 +70,6 @@ export type Database = {
           referred_by?: string | null;
           created_at?: string;
           updated_at?: string;
-          is_suspended?: boolean;
         };
       };
       badges: {
@@ -308,41 +305,6 @@ export type Database = {
           description?: string | null;
           is_active?: boolean;
           created_at?: string;
-          updated_at?: string;
-        };
-      };
-      redeemed_items: {
-        Row: {
-          id: string;
-          user_id: string;
-          item_id: string;
-          item_name: string;
-          points_cost: number;
-          status: string;
-          fulfillment_details: any; // jsonb
-          redeemed_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          item_id: string;
-          item_name: string;
-          points_cost: number;
-          status?: string;
-          fulfillment_details?: any;
-          redeemed_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          item_id?: string;
-          item_name?: string;
-          points_cost?: number;
-          status?: string;
-          fulfillment_details?: any;
-          redeemed_at?: string;
           updated_at?: string;
         };
       };

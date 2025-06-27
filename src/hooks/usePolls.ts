@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { PollService } from '../services/pollService';
-import { BadgeService } from '../services/badgeService';
 import type { Poll, PollCreateRequest, PollVoteRequest, PollVoteResult } from '../types/api';
 import { useToast } from './useToast';
 
@@ -198,10 +197,6 @@ export const usePolls = (userId?: string, initialTab: 'trending' | 'recent' | 'm
     } else {
       // Add new poll to the beginning of the list
       setPolls(prev => [data!, ...prev]);
-      
-      // Check for poll creation badges
-      await BadgeService.checkAndAwardBadges(userId);
-      
       setLoading(false);
       return { success: true, poll: data || undefined };
     }
@@ -228,10 +223,6 @@ export const usePolls = (userId?: string, initialTab: 'trending' | 'recent' | 'm
           poll.id === data.poll!.id ? data.poll! : poll
         ));
       }
-      
-      // Check for voting-related badges
-      await BadgeService.checkAndAwardBadges(userId);
-      
       setLoading(false);
       return { success: true, result: data || undefined };
     }
