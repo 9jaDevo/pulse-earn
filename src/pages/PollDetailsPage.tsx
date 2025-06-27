@@ -45,6 +45,10 @@ export const PollDetailsPage: React.FC = () => {
   const [creatorName, setCreatorName] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
   
+  // Related polls state
+  const [relatedPolls, setRelatedPolls] = useState<Poll[]>([]);
+  const [relatedPollsLoading, setRelatedPollsLoading] = useState(false);
+  
   // Check if user can edit/delete the poll
   const canManagePoll = poll && (
     profile?.role === 'admin' || 
@@ -80,6 +84,9 @@ export const PollDetailsPage: React.FC = () => {
             setCreatorName(creatorProfile.name);
           }
         }
+        
+        // Fetch related polls
+        fetchRelatedPolls(data.category, data.id);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       } finally {
@@ -89,6 +96,32 @@ export const PollDetailsPage: React.FC = () => {
     
     fetchPollDetails();
   }, [slug, user?.id]);
+  
+  const fetchRelatedPolls = async (category: string, currentPollId: string) => {
+    setRelatedPollsLoading(true);
+    
+    try {
+      const { data, error } = await PollService.fetchPolls(user?.id, {
+        limit: 3,
+        category: category,
+        orderBy: 'total_votes',
+        order: 'desc'
+      });
+      
+      if (error) {
+        console.error('Error fetching related polls:', error);
+        return;
+      }
+      
+      // Filter out the current poll
+      const filtered = (data || []).filter(p => p.id !== currentPollId);
+      setRelatedPolls(filtered);
+    } catch (err) {
+      console.error('Exception fetching related polls:', err);
+    } finally {
+      setRelatedPollsLoading(false);
+    }
+  };
   
   const handleVote = async (optionIndex: number) => {
     if (!user || !poll) return;
@@ -432,16 +465,58 @@ export const PollDetailsPage: React.FC = () => {
           <div className="lg:w-80">
             <SidebarAd />
             
-            {/* Related Polls - would be implemented with actual data in a real app */}
+            {/* Related Polls */}
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mt-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Related Polls</h3>
-              <p className="text-gray-500 text-sm">Explore more polls in the {poll.category} category.</p>
-              <button
-                onClick={() => navigate('/polls')}
-                className="w-full mt-4 bg-primary-100 text-primary-700 px-4 py-2 rounded-lg hover:bg-primary-200 transition-colors"
-              >
-                View More Polls
-              </button>
+              
+              {relatedPollsLoading ? (
+                <div className="text-center py-6">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
+                  <p className="text-gray-500 text-sm">Loading related polls...</p>
+                </div>
+              ) : relatedPolls.length === 0 ? (
+                <div>
+                  <p className="text-gray-500 text-sm mb-4">No related polls found in the {poll.category} category.</p>
+                  <button
+                    onClick={() => navigate('/polls')}
+                    className="w-full mt-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-lg hover:bg-primary-200 transition-colors"
+                  >
+                    View More Polls
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {relatedPolls.map(relatedPoll => (
+                    <div key={relatedPoll.id} className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors">
+                      <Link
+                        to={`/polls/${relatedPoll.slug}`}
+                        className="block"
+                      >
+                        <h4 className="font-medium text-gray-900 mb-1 hover:text-primary-600 transition-colors">
+                          {relatedPoll.title}
+                        </h4>
+                        <div className="flex justify-between text-sm text-gray-500">
+                          <span className="flex items-center">
+                            <Users className="h-3 w-3 mr-1" />
+                            {relatedPoll.total_votes} votes
+                          </span>
+                          <span className="flex items-center">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {relatedPoll.timeLeft}
+                          </span>
+                        </div>
+                      </Link>
+                    </div>
+                  ))}
+                  
+                  <button
+                    onClick={() => navigate(`/polls?category=${poll.category}`)}
+                    className="w-full mt-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-lg hover:bg-primary-200 transition-colors"
+                  >
+                    View More in {poll.category}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Brain, Clock, Trophy, Star, Zap, Users, Target, Award } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { RewardService, type TriviaGameSummary } from '../services/rewardService';
@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { ContentAd } from '../components/ads/ContentAd';
 import { SidebarAd } from '../components/ads/SidebarAd';
 import { useToast } from '../hooks/useToast';
+import { useCountdown, getNextMidnightUTC } from '../hooks/useCountdown';
 
 export const TriviaPage: React.FC = () => {
   const { user, profile } = useAuth();
@@ -23,12 +24,20 @@ export const TriviaPage: React.FC = () => {
     pointsEarned: 0,
     rank: 0
   });
+  
+  // Daily challenge state
+  const [dailyChallengeGame, setDailyChallengeGame] = useState<TriviaGameSummary | null>(null);
+  const [dailyChallengeLoading, setDailyChallengeLoading] = useState(true);
+  
+  // Countdown to next daily challenge
+  const nextMidnight = getNextMidnightUTC();
+  const countdown = useCountdown(nextMidnight);
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchTriviaData();
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (categories.length > 0 || difficulties.length > 0) {
       fetchTriviaGames();
     }
@@ -36,6 +45,7 @@ export const TriviaPage: React.FC = () => {
 
   const fetchTriviaData = async () => {
     setLoading(true);
+    setDailyChallengeLoading(true);
     setError(null);
 
     try {
@@ -67,12 +77,56 @@ export const TriviaPage: React.FC = () => {
         pointsEarned: profile?.points || 0,
         rank: 247
       });
+      
+      // Fetch daily challenge
+      await fetchDailyChallenge();
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load trivia data');
     } finally {
       setLoading(false);
     }
+  };
+  
+  const fetchDailyChallenge = async () => {
+    try {
+      // Fetch all trivia games
+      const { data, error } = await RewardService.getTriviaGameSummaries();
+      
+      if (error || !data || data.length === 0) {
+        setDailyChallengeLoading(false);
+        return;
+      }
+      
+      // Deterministically select a daily challenge based on the current date
+      const today = new Date();
+      const dayOfYear = getDayOfYear(today);
+      
+      // Use the day of year to select a game (ensures same game all day)
+      const selectedIndex = dayOfYear % data.length;
+      const dailyGame = data[selectedIndex];
+      
+      // Enhance the daily challenge with bonus points (50% more than normal)
+      const enhancedGame = {
+        ...dailyGame,
+        pointsReward: Math.round(dailyGame.pointsReward * 1.5),
+        title: `Daily Challenge: ${dailyGame.title}`
+      };
+      
+      setDailyChallengeGame(enhancedGame);
+    } catch (err) {
+      console.error('Error fetching daily challenge:', err);
+    } finally {
+      setDailyChallengeLoading(false);
+    }
+  };
+  
+  // Helper function to get day of year (1-366)
+  const getDayOfYear = (date: Date): number => {
+    const start = new Date(date.getFullYear(), 0, 0);
+    const diff = date.getTime() - start.getTime();
+    const oneDay = 1000 * 60 * 60 * 24;
+    return Math.floor(diff / oneDay);
   };
 
   const fetchTriviaGames = async () => {
@@ -128,6 +182,11 @@ export const TriviaPage: React.FC = () => {
     };
     
     return descriptions[category as keyof typeof descriptions] || `Test your knowledge in ${category}`;
+  };
+  
+  // Format countdown time
+  const formatCountdown = (hours: number, minutes: number, seconds: number): string => {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   if (loading) {
@@ -354,27 +413,53 @@ export const TriviaPage: React.FC = () => {
 
         {/* Daily Challenge */}
         <div className="mt-12 bg-gradient-to-r from-primary-600 to-secondary-600 rounded-2xl p-8 text-white">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="mb-6 md:mb-0">
+          {dailyChallengeLoading ? (
+            <div className="text-center py-6">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
+              <p className="text-white">Loading daily challenge...</p>
+            </div>
+          ) : dailyChallengeGame ? (
+            <div className="flex flex-col md:flex-row items-center justify-between">
+              <div className="mb-6 md:mb-0">
+                <h2 className="text-2xl font-bold mb-2">Daily Challenge</h2>
+                <p className="text-primary-100 mb-4">
+                  {dailyChallengeGame.title.replace('Daily Challenge: ', '')} - Complete today's special trivia challenge for bonus rewards!
+                </p>
+                <div className="flex items-center space-x-4 text-sm">
+                  <span className="flex items-center space-x-1">
+                    <Clock className="h-4 w-4" />
+                    <span>Resets in {formatCountdown(countdown.hours, countdown.minutes, countdown.seconds)}</span>
+                  </span>
+                  <span className="flex items-center space-x-1">
+                    <Zap className="h-4 w-4" />
+                    <span>{dailyChallengeGame.pointsReward} bonus points</span>
+                  </span>
+                </div>
+              </div>
+              {user ? (
+                <Link 
+                  to={`/trivia/game/${dailyChallengeGame.id}`}
+                  className="bg-white text-primary-600 px-8 py-3 rounded-xl font-semibold hover:bg-gray-50 transition-colors transform hover:scale-105"
+                >
+                  Start Challenge
+                </Link>
+              ) : (
+                <button
+                  onClick={() => errorToast('Please sign in to play the daily challenge')}
+                  className="bg-white text-primary-600 px-8 py-3 rounded-xl font-semibold hover:bg-gray-50 transition-colors transform hover:scale-105"
+                >
+                  Start Challenge
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-6">
               <h2 className="text-2xl font-bold mb-2">Daily Challenge</h2>
               <p className="text-primary-100 mb-4">
-                Complete today's special trivia challenge for bonus rewards!
+                No daily challenge available at the moment. Please check back later!
               </p>
-              <div className="flex items-center space-x-4 text-sm">
-                <span className="flex items-center space-x-1">
-                  <Clock className="h-4 w-4" />
-                  <span>Resets in 14:32:18</span>
-                </span>
-                <span className="flex items-center space-x-1">
-                  <Zap className="h-4 w-4" />
-                  <span>500 bonus points</span>
-                </span>
-              </div>
             </div>
-            <button className="bg-white text-primary-600 px-8 py-3 rounded-xl font-semibold hover:bg-gray-50 transition-colors transform hover:scale-105">
-              Start Challenge
-            </button>
-          </div>
+          )}
         </div>
       </div>
     </div>
