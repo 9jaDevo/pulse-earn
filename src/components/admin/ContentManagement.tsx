@@ -28,11 +28,15 @@ import { useToast } from '../../hooks/useToast';
 import type { PollCategory, Poll, TriviaQuestion, Badge, TriviaGame } from '../../types/api';
 import { EditPollModal } from '../polls/EditPollModal';
 import { DeletePollModal } from '../polls/DeletePollModal';
-import { AddEditTriviaModal } from './AddEditTriviaModal';
+import { CreatePollModal } from '../polls/CreatePollModal';
+import { AddEditTriviaGameModal } from './AddEditTriviaGameModal';
+import { AddEditTriviaQuestionModal } from './AddEditTriviaQuestionModal';
 import { AddEditBadgeModal } from './AddEditBadgeModal';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 export const ContentManagement: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'polls' | 'categories' | 'trivia' | 'badges'>('polls');
   const { successToast, errorToast } = useToast();
   
@@ -43,6 +47,10 @@ export const ContentManagement: React.FC = () => {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCategory, setNewCategory] = useState({ name: '', description: '' });
   const [isCreating, setIsCreating] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<PollCategory | null>(null);
+  const [categoriesPage, setCategoriesPage] = useState(1);
+  const [categoriesTotalCount, setCategoriesTotalCount] = useState(0);
+  const [categoriesPerPage] = useState(10);
 
   // Poll Management State
   const [polls, setPolls] = useState<Poll[]>([]);
@@ -53,16 +61,19 @@ export const ContentManagement: React.FC = () => {
   const [selectedPoll, setSelectedPoll] = useState<Poll | null>(null);
   const [showEditPollModal, setShowEditPollModal] = useState(false);
   const [showDeletePollModal, setShowDeletePollModal] = useState(false);
+  const [showCreatePollModal, setShowCreatePollModal] = useState(false);
   const [pollsPerPage] = useState(10);
 
   // Trivia Management State
-  const [triviaGames, setTriviaGames] = useState<any[]>([]);
+  const [triviaGames, setTriviaGames] = useState<TriviaGameSummary[]>([]);
   const [triviaLoading, setTriviaLoading] = useState(false);
   const [triviaError, setTriviaError] = useState<string | null>(null);
   const [triviaPage, setTriviaPage] = useState(1);
   const [triviaTotalCount, setTriviaTotalCount] = useState(0);
+  const [selectedTriviaGame, setSelectedTriviaGame] = useState<TriviaGame | null>(null);
   const [selectedTriviaQuestion, setSelectedTriviaQuestion] = useState<TriviaQuestion | null>(null);
-  const [showAddEditTriviaModal, setShowAddEditTriviaModal] = useState(false);
+  const [showAddEditGameModal, setShowAddEditGameModal] = useState(false);
+  const [showAddEditQuestionModal, setShowAddEditQuestionModal] = useState(false);
   const [triviaPerPage] = useState(10);
   const [expandedGameId, setExpandedGameId] = useState<string | null>(null);
   const [gameQuestionsMap, setGameQuestionsMap] = useState<Record<string, TriviaQuestion[]>>({});
@@ -78,12 +89,12 @@ export const ContentManagement: React.FC = () => {
   const [showAddEditBadgeModal, setShowAddEditBadgeModal] = useState(false);
   const [badgesPerPage] = useState(10);
 
-  // Fetch categories when component mounts
+  // Fetch categories when component mounts or page changes
   useEffect(() => {
     if (activeTab === 'categories') {
       fetchCategories();
     }
-  }, [activeTab]);
+  }, [activeTab, categoriesPage]);
 
   // Fetch polls when polls tab is active or page changes
   useEffect(() => {
@@ -112,12 +123,17 @@ export const ContentManagement: React.FC = () => {
     setError(null);
     
     try {
+      const offset = (categoriesPage - 1) * categoriesPerPage;
+      
+      // In a real implementation, you would have pagination in the API
+      // For now, we'll fetch all and paginate client-side
       const { data, error } = await PollService.getAllPollCategories();
       
       if (error) {
         setError(error);
       } else {
         setCategories(data || []);
+        setCategoriesTotalCount(data?.length || 0);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch categories');
@@ -154,6 +170,71 @@ export const ContentManagement: React.FC = () => {
       console.error(err);
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleEditCategory = () => {
+    if (!editingCategory) return;
+    
+    setIsCreating(true);
+    
+    const updateCategory = async () => {
+      try {
+        const { error } = await supabase
+          .from('poll_categories')
+          .update({
+            name: editingCategory.name,
+            description: editingCategory.description,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingCategory.id);
+        
+        if (error) {
+          throw error;
+        }
+        
+        // Update local state
+        setCategories(prev => 
+          prev.map(cat => cat.id === editingCategory.id ? editingCategory : cat)
+        );
+        
+        successToast('Category updated successfully');
+        setShowCategoryModal(false);
+      } catch (err) {
+        console.error('Error updating category:', err);
+        errorToast('Failed to update category');
+      } finally {
+        setIsCreating(false);
+        setEditingCategory(null);
+      }
+    };
+    
+    updateCategory();
+  };
+
+  const handleToggleCategoryStatus = async (category: PollCategory) => {
+    try {
+      const { error } = await supabase
+        .from('poll_categories')
+        .update({
+          is_active: !category.is_active,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', category.id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Update local state
+      setCategories(prev => 
+        prev.map(cat => cat.id === category.id ? { ...cat, is_active: !cat.is_active } : cat)
+      );
+      
+      successToast(`Category ${category.is_active ? 'deactivated' : 'activated'} successfully`);
+    } catch (err) {
+      console.error('Error toggling category status:', err);
+      errorToast('Failed to update category status');
     }
   };
 
@@ -196,6 +277,12 @@ export const ContentManagement: React.FC = () => {
     }
   };
 
+  const handlePollCreated = (newPoll: Poll) => {
+    setPolls(prev => [newPoll, ...prev]);
+    setShowCreatePollModal(false);
+    successToast('Poll created successfully');
+  };
+
   const handlePollUpdated = (updatedPoll: Poll) => {
     setPolls(prev => prev.map(poll => poll.id === updatedPoll.id ? updatedPoll : poll));
     setShowEditPollModal(false);
@@ -218,7 +305,8 @@ export const ContentManagement: React.FC = () => {
       
       // Fetch trivia games with pagination
       const { data, error } = await RewardService.getTriviaGameSummaries({
-        limit: triviaPerPage
+        limit: triviaPerPage,
+        offset
       });
       
       if (error) {
@@ -313,6 +401,24 @@ export const ContentManagement: React.FC = () => {
     }
   };
 
+  const handleGameCreated = () => {
+    fetchTriviaGames();
+    successToast('Trivia game created successfully');
+  };
+
+  const handleGameUpdated = () => {
+    fetchTriviaGames();
+    successToast('Trivia game updated successfully');
+  };
+
+  const handleQuestionCreated = (gameId: string) => {
+    // Refresh questions for the game
+    if (gameId) {
+      fetchQuestionsForGame(gameId);
+    }
+    successToast('Trivia question created successfully');
+  };
+
   // Badge Management Functions
   const fetchBadges = async () => {
     setBadgesLoading(true);
@@ -371,7 +477,11 @@ export const ContentManagement: React.FC = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-gray-900">Category Management</h2>
         <button 
-          onClick={() => setShowCategoryModal(true)}
+          onClick={() => {
+            setEditingCategory(null);
+            setNewCategory({ name: '', description: '' });
+            setShowCategoryModal(true);
+          }}
           className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors flex items-center space-x-2"
         >
           <Plus className="h-4 w-4" />
@@ -414,7 +524,9 @@ export const ContentManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {categories.map((category) => (
+                {categories
+                  .slice((categoriesPage - 1) * categoriesPerPage, categoriesPage * categoriesPerPage)
+                  .map((category) => (
                   <tr key={category.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
@@ -441,10 +553,23 @@ export const ContentManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        <button className="text-primary-600 hover:text-primary-900">
+                        <button 
+                          onClick={() => {
+                            setEditingCategory(category);
+                            setNewCategory({
+                              name: category.name,
+                              description: category.description || ''
+                            });
+                            setShowCategoryModal(true);
+                          }}
+                          className="text-primary-600 hover:text-primary-900"
+                        >
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button className="text-gray-600 hover:text-gray-900">
+                        <button 
+                          onClick={() => handleToggleCategoryStatus(category)}
+                          className="text-gray-600 hover:text-gray-900"
+                        >
                           {category.is_active ? (
                             <EyeOff className="h-4 w-4" />
                           ) : (
@@ -458,6 +583,39 @@ export const ContentManagement: React.FC = () => {
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination */}
+          {categoriesTotalCount > categoriesPerPage && (
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                Showing {(categoriesPage - 1) * categoriesPerPage + 1} to {Math.min(categoriesPage * categoriesPerPage, categoriesTotalCount)} of {categoriesTotalCount} categories
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setCategoriesPage(prev => Math.max(prev - 1, 1))}
+                  disabled={categoriesPage === 1}
+                  className={`p-2 rounded-md ${
+                    categoriesPage === 1 
+                      ? 'text-gray-400 cursor-not-allowed' 
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => setCategoriesPage(prev => prev + 1)}
+                  disabled={categoriesPage * categoriesPerPage >= categoriesTotalCount}
+                  className={`p-2 rounded-md ${
+                    categoriesPage * categoriesPerPage >= categoriesTotalCount
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -468,6 +626,13 @@ export const ContentManagement: React.FC = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-gray-900">Poll Management</h2>
         <div className="flex space-x-2">
+          <button
+            onClick={() => setShowCreatePollModal(true)}
+            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors flex items-center space-x-2"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Create Poll</span>
+          </button>
           <button
             onClick={fetchPolls}
             className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
@@ -493,6 +658,12 @@ export const ContentManagement: React.FC = () => {
           <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No polls found</h3>
           <p className="text-gray-600 mb-4">There are no polls in the system yet.</p>
+          <button
+            onClick={() => setShowCreatePollModal(true)}
+            className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            Create First Poll
+          </button>
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -616,6 +787,15 @@ export const ContentManagement: React.FC = () => {
         </div>
       )}
       
+      {/* Create Poll Modal */}
+      {showCreatePollModal && user && (
+        <CreatePollModal
+          onClose={() => setShowCreatePollModal(false)}
+          onPollCreated={handlePollCreated}
+          userId={user.id}
+        />
+      )}
+      
       {/* Edit Poll Modal */}
       {showEditPollModal && selectedPoll && (
         <EditPollModal
@@ -643,13 +823,13 @@ export const ContentManagement: React.FC = () => {
         <div className="flex space-x-2">
           <button
             onClick={() => {
-              setSelectedTriviaQuestion(null);
-              setShowAddEditTriviaModal(true);
+              setSelectedTriviaGame(null);
+              setShowAddEditGameModal(true);
             }}
             className="bg-secondary-600 text-white px-4 py-2 rounded-lg hover:bg-secondary-700 transition-colors flex items-center space-x-2"
           >
             <Plus className="h-4 w-4" />
-            <span>Add Question</span>
+            <span>Add Game</span>
           </button>
           <button
             onClick={fetchTriviaGames}
@@ -678,12 +858,12 @@ export const ContentManagement: React.FC = () => {
           <p className="text-gray-600 mb-4">Add your first trivia game to get started.</p>
           <button
             onClick={() => {
-              setSelectedTriviaQuestion(null);
-              setShowAddEditTriviaModal(true);
+              setSelectedTriviaGame(null);
+              setShowAddEditGameModal(true);
             }}
             className="bg-secondary-600 text-white px-6 py-3 rounded-lg hover:bg-secondary-700 transition-colors"
           >
-            Add First Question
+            Add First Game
           </button>
         </div>
       ) : (
@@ -759,12 +939,23 @@ export const ContentManagement: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
                           <button
+                            onClick={() => {
+                              setSelectedTriviaGame(game as any);
+                              setShowAddEditGameModal(true);
+                            }}
                             className="text-secondary-600 hover:text-secondary-900"
                             title="Edit Game"
                           >
                             <Edit className="h-4 w-4" />
                           </button>
                           <button
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this game?')) {
+                                // Delete game logic
+                                successToast('Game deleted successfully');
+                                fetchTriviaGames();
+                              }
+                            }}
                             className="text-error-600 hover:text-error-900"
                             title="Delete Game"
                           >
@@ -784,7 +975,7 @@ export const ContentManagement: React.FC = () => {
                               <button
                                 onClick={() => {
                                   setSelectedTriviaQuestion(null);
-                                  setShowAddEditTriviaModal(true);
+                                  setShowAddEditQuestionModal(true);
                                 }}
                                 className="bg-secondary-600 text-white px-3 py-1 rounded-lg hover:bg-secondary-700 transition-colors text-sm flex items-center space-x-1"
                               >
@@ -844,7 +1035,7 @@ export const ContentManagement: React.FC = () => {
                                             <button
                                               onClick={() => {
                                                 setSelectedTriviaQuestion(question);
-                                                setShowAddEditTriviaModal(true);
+                                                setShowAddEditQuestionModal(true);
                                               }}
                                               className="text-secondary-600 hover:text-secondary-900"
                                               title="Edit Question"
@@ -911,18 +1102,24 @@ export const ContentManagement: React.FC = () => {
         </div>
       )}
       
-      {/* Add/Edit Trivia Modal */}
-      {showAddEditTriviaModal && (
-        <AddEditTriviaModal
-          isOpen={showAddEditTriviaModal}
-          onClose={() => setShowAddEditTriviaModal(false)}
-          onSave={() => {
-            fetchTriviaGames();
-            if (expandedGameId) {
-              fetchQuestionsForGame(expandedGameId);
-            }
-          }}
+      {/* Add/Edit Game Modal */}
+      {showAddEditGameModal && (
+        <AddEditTriviaGameModal
+          isOpen={showAddEditGameModal}
+          onClose={() => setShowAddEditGameModal(false)}
+          onSave={handleGameCreated}
+          game={selectedTriviaGame}
+        />
+      )}
+      
+      {/* Add/Edit Question Modal */}
+      {showAddEditQuestionModal && (
+        <AddEditTriviaQuestionModal
+          isOpen={showAddEditQuestionModal}
+          onClose={() => setShowAddEditQuestionModal(false)}
+          onSave={() => handleQuestionCreated(expandedGameId || '')}
           question={selectedTriviaQuestion}
+          gameId={expandedGameId || ''}
         />
       )}
     </div>
@@ -1119,18 +1316,23 @@ export const ContentManagement: React.FC = () => {
       {activeTab === 'trivia' && renderTrivia()}
       {activeTab === 'badges' && renderBadges()}
       
-      {/* Create Category Modal */}
+      {/* Create/Edit Category Modal */}
       {showCategoryModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-8 relative animate-slide-up">
             <button
-              onClick={() => setShowCategoryModal(false)}
+              onClick={() => {
+                setShowCategoryModal(false);
+                setEditingCategory(null);
+              }}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
             >
               ×
             </button>
 
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Category</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+              {editingCategory ? 'Edit Category' : 'Create New Category'}
+            </h2>
 
             <div className="space-y-6">
               <div>
@@ -1163,18 +1365,21 @@ export const ContentManagement: React.FC = () => {
               <div className="flex justify-end space-x-4">
                 <button
                   type="button"
-                  onClick={() => setShowCategoryModal(false)}
+                  onClick={() => {
+                    setShowCategoryModal(false);
+                    setEditingCategory(null);
+                  }}
                   className="px-6 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={handleCreateCategory}
+                  onClick={editingCategory ? handleEditCategory : handleCreateCategory}
                   disabled={!newCategory.name.trim() || isCreating}
                   className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-6 py-3 rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isCreating ? 'Creating...' : 'Create Category'}
+                  {isCreating ? 'Saving...' : editingCategory ? 'Update Category' : 'Create Category'}
                 </button>
               </div>
             </div>

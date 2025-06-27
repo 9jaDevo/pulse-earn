@@ -66,10 +66,13 @@ export interface AuthResponse {
 // Future API types for other modules
 export interface PollCreateRequest {
   title: string;
-  description: string;
+  description?: string;
   options: string[];
+  type?: 'global' | 'country';
+  country?: string;
   category: string;
-  duration: number; // in hours
+  start_date?: string;
+  active_until?: string;
 }
 
 export interface TriviaGameRequest {
@@ -146,6 +149,19 @@ export interface TriviaGame {
   created_by: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface TriviaGameSummary {
+  id: string;
+  title: string;
+  description?: string;
+  category: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  questionCount: number;
+  averageRating: number;
+  totalPlayers: number;
+  pointsReward: number;
+  estimatedTime: string;
 }
 
 export interface TriviaGameSession {
@@ -372,6 +388,14 @@ export interface ContentReport {
   updated_at: string;
   resolved_by?: string;
   resolution_notes?: string;
+  reporter?: {
+    name: string;
+    email: string;
+  };
+  resolver?: {
+    name: string;
+    email: string;
+  };
 }
 
 export interface ContentReportCreateRequest {
