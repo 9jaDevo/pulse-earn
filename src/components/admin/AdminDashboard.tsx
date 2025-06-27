@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { AdminSidebar } from './AdminSidebar';
 import { UserManagement } from './UserManagement';
 import { ContentManagement } from './ContentManagement';
@@ -6,11 +7,34 @@ import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { ModerationTools } from './ModerationTools';
 import { SystemSettings } from './SystemSettings';
 import { RewardStoreManagement } from './RewardStoreManagement';
+import { OverviewDashboard } from './OverviewDashboard';
 
 type AdminSection = 'overview' | 'users' | 'content' | 'analytics' | 'moderation' | 'settings' | 'rewards';
 
 export const AdminDashboard: React.FC = () => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
+  const location = useLocation();
+
+  // Parse section from URL query parameter
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const section = params.get('section') as AdminSection | null;
+    if (section && ['overview', 'users', 'content', 'analytics', 'moderation', 'settings', 'rewards'].includes(section)) {
+      setActiveSection(section);
+    }
+  }, [location]);
+
+  // Update URL when section changes
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    params.set('section', activeSection);
+    const newUrl = `${location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', newUrl);
+  }, [activeSection, location.pathname]);
+
+  const handleSectionChange = (section: AdminSection) => {
+    setActiveSection(section);
+  };
 
   const renderContent = () => {
     switch (activeSection) {
@@ -27,7 +51,7 @@ export const AdminDashboard: React.FC = () => {
       case 'rewards':
         return <RewardStoreManagement />;
       default:
-        return <AnalyticsDashboard />;
+        return <OverviewDashboard />;
     }
   };
 
@@ -37,7 +61,7 @@ export const AdminDashboard: React.FC = () => {
         {/* Sidebar */}
         <AdminSidebar 
           activeSection={activeSection} 
-          onSectionChange={setActiveSection} 
+          onSectionChange={handleSectionChange} 
         />
 
         {/* Main Content */}
