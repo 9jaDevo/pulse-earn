@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Gift, 
   Calendar, 
@@ -14,23 +14,29 @@ import {
   Brain,
   Play,
   Tv,
-  Award
+  Award,
+  ShoppingBag,
+  Package,
+  Info,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRewards } from '../hooks/useRewards';
 import { useBadges } from '../hooks/useBadges';
 import { useCountdown, getNextMidnightUTC } from '../hooks/useCountdown';
-import type { TriviaQuestion, TriviaResult } from '../types/api';
+import type { TriviaQuestion, TriviaResult, RedeemItemRequest, RewardStoreItem } from '../types/api';
 import { ContentAd } from '../components/ads/ContentAd';
 import { SpinWinModal } from '../components/rewards/SpinWinModal';
+import { useToast } from '../hooks/useToast';
 
 export const RewardsPage: React.FC = () => {
-  const { user, profile } = useAuth();
-  const { status, loading, performSpin, getTriviaQuestion, submitTriviaAnswer, watchAd } = useRewards(user?.id);
+  const { user, profile, updateProfile } = useAuth();
+  const { status, loading, performSpin, getTriviaQuestion, submitTriviaAnswer, watchAd, redeemStoreItem, redeemedItems, fetchRedeemedItems, getRewardStoreItems } = useRewards(user?.id);
   const { userProgress, loading: badgesLoading, error: badgesError } = useBadges(user?.id);
   const countdown = useCountdown(React.useMemo(() => getNextMidnightUTC(), []));
+  const { successToast, errorToast } = useToast();
   
-  const [activeTab, setActiveTab] = useState<'daily' | 'achievements' | 'store'>('daily');
+  const [activeTab, setActiveTab] = useState<'daily' | 'achievements' | 'store' | 'history'>('daily');
   const [spinLoading, setSpinLoading] = useState(false);
   const [showSpinWinModal, setShowSpinWinModal] = useState(false);
   const [triviaQuestion, setTriviaQuestion] = useState<TriviaQuestion | null>(null);
@@ -40,45 +46,48 @@ export const RewardsPage: React.FC = () => {
   const [adLoading, setAdLoading] = useState(false);
   const [spinResult, setSpinResult] = useState<any>(null);
   const [adResult, setAdResult] = useState<any>(null);
+  const [redeemingItem, setRedeemingItem] = useState<string | null>(null);
+  const [storeItems, setStoreItems] = useState<RewardStoreItem[]>([]);
+  const [storeItemsLoading, setStoreItemsLoading] = useState(false);
+  const [storeItemsError, setStoreItemsError] = useState<string | null>(null);
+  const [selectedItemType, setSelectedItemType] = useState<string>('all');
 
-  const storeItems = [
-    {
-      id: 1,
-      name: 'Amazon Gift Card',
-      value: '$10',
-      cost: 5000,
-      image: '🎁',
-      category: 'Gift Cards',
-      available: true
-    },
-    {
-      id: 2,
-      name: 'Netflix Subscription',
-      value: '1 Month',
-      cost: 4500,
-      image: '📺',
-      category: 'Subscriptions',
-      available: true
-    },
-    {
-      id: 3,
-      name: 'Spotify Premium',
-      value: '3 Months',
-      cost: 3500,
-      image: '🎵',
-      category: 'Subscriptions',
-      available: true
-    },
-    {
-      id: 4,
-      name: 'PayPal Cash',
-      value: '$25',
-      cost: 12000,
-      image: '💰',
-      category: 'Cash',
-      available: false
+  // Fetch store items when component mounts or when filter changes
+  useEffect(() => {
+    const fetchStoreItems = async () => {
+      setStoreItemsLoading(true);
+      setStoreItemsError(null);
+      
+      try {
+        const options: any = {
+          inStock: true
+        };
+        
+        if (selectedItemType !== 'all') {
+          options.itemType = selectedItemType;
+        }
+        
+        const { data, error } = await getRewardStoreItems(options);
+        
+        if (error) {
+          setStoreItemsError(error);
+          errorToast(`Failed to load reward items: ${error}`);
+        } else {
+          setStoreItems(data || []);
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+        setStoreItemsError(errorMessage);
+        errorToast(`Error: ${errorMessage}`);
+      } finally {
+        setStoreItemsLoading(false);
+      }
+    };
+    
+    if (activeTab === 'store') {
+      fetchStoreItems();
     }
-  ];
+  }, [activeTab, selectedItemType]);
 
   const handleSpin = async () => {
     setSpinLoading(true);
@@ -141,12 +150,126 @@ export const RewardsPage: React.FC = () => {
     }, 3000); // 3 second simulated ad
   };
 
+  const handleRedeem = async (item: RewardStoreItem) => {
+    if (!user || !profile) {
+      errorToast('Please sign in to redeem items.');
+      return;
+    }
+    
+    if (profile.points < item.points_cost) {
+      errorToast('You do not have enough points to redeem this item.');
+      return;
+    }
+    
+    // Check if item is out of stock
+    if (item.stock_quantity !== null && item.stock_quantity <= 0) {
+      errorToast('This item is currently out of stock.');
+      return;
+    }
+    
+    setRedeemingItem(item.id);
+    
+    try {
+      // Prepare additional details based on item type
+      const fulfillmentDetails: Record<string, any> = {
+        redeemedBy: profile.name || user.email,
+        redeemedAt: new Date().toISOString(),
+        itemType: item.item_type
+      };
+      
+      // For physical items, we'll need shipping address later
+      if (item.item_type === 'physical_item') {
+        fulfillmentDetails.requiresShipping = true;
+      }
+      
+      // For bank transfers, we'll need bank details later
+      if (item.item_type === 'bank_transfer') {
+        fulfillmentDetails.requiresBankDetails = true;
+      }
+      
+      // For PayPal, ensure we have the email
+      if (item.item_type === 'paypal_payout') {
+        fulfillmentDetails.paypalEmail = profile.email;
+      }
+      
+      const request: RedeemItemRequest = {
+        itemId: item.id,
+        itemName: item.name,
+        pointsCost: item.points_cost,
+        fulfillmentDetails
+      };
+      
+      const result = await redeemStoreItem(request);
+      
+      if (result.success && result.result) {
+        successToast(result.result.message);
+        
+        // Update local profile points to reflect the deduction
+        if (result.result.newPointsBalance !== undefined && updateProfile) {
+          updateProfile({ points: result.result.newPointsBalance });
+        }
+        
+        // Refresh the store items to update stock
+        const { data } = await getRewardStoreItems({
+          inStock: true,
+          itemType: selectedItemType !== 'all' ? selectedItemType : undefined
+        });
+        
+        if (data) {
+          setStoreItems(data);
+        }
+      } else {
+        errorToast(result.error || 'Failed to redeem item. Please try again.');
+      }
+    } catch (err) {
+      errorToast('An unexpected error occurred during redemption.');
+      console.error('Redemption error:', err);
+    } finally {
+      setRedeemingItem(null);
+    }
+  };
+
   const currentStreak = status?.triviaStreak || 0;
   const totalPoints = profile?.points || 0;
 
   const formatCountdownTime = (time: number): string => {
     return time.toString().padStart(2, '0');
   };
+
+  // Get item type display name
+  const getItemTypeDisplay = (type: string): string => {
+    switch (type) {
+      case 'gift_card': return 'Gift Cards';
+      case 'subscription_code': return 'Subscriptions';
+      case 'paypal_payout': return 'PayPal';
+      case 'bank_transfer': return 'Bank Transfers';
+      case 'physical_item': return 'Physical Items';
+      default: return 'All Items';
+    }
+  };
+
+  // Get item type icon
+  const getItemTypeIcon = (type: string): React.ReactNode => {
+    switch (type) {
+      case 'gift_card': return <Gift className="h-4 w-4" />;
+      case 'subscription_code': return <Play className="h-4 w-4" />;
+      case 'paypal_payout': return <ShoppingBag className="h-4 w-4" />;
+      case 'bank_transfer': return <Package className="h-4 w-4" />;
+      case 'physical_item': return <Package className="h-4 w-4" />;
+      default: return <Gift className="h-4 w-4" />;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading reward center...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -227,7 +350,8 @@ export const RewardsPage: React.FC = () => {
             {[
               { key: 'daily', label: 'Daily Rewards', icon: Calendar },
               { key: 'achievements', label: 'Achievements', icon: Trophy },
-              { key: 'store', label: 'Reward Store', icon: Gift }
+              { key: 'store', label: 'Reward Store', icon: Gift },
+              { key: 'history', label: 'Redemption History', icon: Package }
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -501,46 +625,232 @@ export const RewardsPage: React.FC = () => {
 
         {/* Store Tab */}
         {activeTab === 'store' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {storeItems.map((item) => (
-              <div
-                key={item.id}
-                className={`bg-white rounded-xl p-6 shadow-sm border border-gray-200 transition-all ${
-                  item.available ? 'hover:shadow-lg hover:-translate-y-1' : 'opacity-60'
-                }`}
-              >
-                <div className="text-center mb-4">
-                  <div className="text-6xl mb-3">{item.image}</div>
-                  <span className="bg-primary-100 text-primary-700 px-2 py-1 rounded-md text-xs font-medium">
-                    {item.category}
-                  </span>
-                </div>
-                
-                <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">{item.name}</h3>
-                <p className="text-center text-gray-600 mb-4">{item.value}</p>
-                
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-2xl font-bold text-primary-600">{item.cost.toLocaleString()}</span>
-                  <span className="text-gray-600">points</span>
-                </div>
-                
+          <div className="space-y-6">
+            {/* Item Type Filter */}
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mb-4">
+              <div className="flex flex-wrap gap-2">
                 <button
-                  disabled={!item.available || totalPoints < item.cost}
-                  className={`w-full py-3 rounded-lg font-medium transition-all ${
-                    item.available && totalPoints >= item.cost
-                      ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 transform hover:scale-105'
-                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  onClick={() => setSelectedItemType('all')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2 ${
+                    selectedItemType === 'all'
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  {!item.available
-                    ? 'Out of Stock'
-                    : totalPoints < item.cost
-                    ? 'Insufficient Points'
-                    : 'Redeem Now'
-                  }
+                  <Gift className="h-4 w-4" />
+                  <span>All Items</span>
+                </button>
+                {['gift_card', 'subscription_code', 'paypal_payout', 'bank_transfer', 'physical_item'].map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setSelectedItemType(type)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2 ${
+                      selectedItemType === type
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {getItemTypeIcon(type)}
+                    <span>{getItemTypeDisplay(type)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Loading State */}
+            {storeItemsLoading && (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading reward items...</p>
+              </div>
+            )}
+
+            {/* Error State */}
+            {storeItemsError && (
+              <div className="bg-error-50 border border-error-200 text-error-700 px-4 py-3 rounded-lg mb-6">
+                <div className="flex items-start">
+                  <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Failed to load reward items</p>
+                    <p className="text-sm">{storeItemsError}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!storeItemsLoading && !storeItemsError && storeItems.length === 0 && (
+              <div className="text-center py-12 bg-gray-50 rounded-lg">
+                <Gift className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No items available</h3>
+                <p className="text-gray-600 mb-4">
+                  {selectedItemType !== 'all' 
+                    ? `No ${getItemTypeDisplay(selectedItemType).toLowerCase()} are currently available.`
+                    : 'There are no items available in the store right now.'}
+                </p>
+                {selectedItemType !== 'all' && (
+                  <button
+                    onClick={() => setSelectedItemType('all')}
+                    className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors"
+                  >
+                    View All Items
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Items Grid */}
+            {!storeItemsLoading && !storeItemsError && storeItems.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {storeItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 transition-all hover:shadow-lg hover:-translate-y-1"
+                  >
+                    <div className="text-center mb-4">
+                      <div className="text-6xl mb-3">{item.image_url || '🎁'}</div>
+                      <span className="bg-primary-100 text-primary-700 px-2 py-1 rounded-md text-xs font-medium">
+                        {getItemTypeDisplay(item.item_type)}
+                      </span>
+                    </div>
+                    
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">{item.name}</h3>
+                    <p className="text-center text-gray-600 mb-4">{item.value}</p>
+                    
+                    {item.description && (
+                      <p className="text-sm text-gray-500 mb-4 text-center">{item.description}</p>
+                    )}
+                    
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-2xl font-bold text-primary-600">{item.points_cost.toLocaleString()}</span>
+                      <span className="text-gray-600">points</span>
+                    </div>
+                    
+                    {item.stock_quantity !== null && (
+                      <div className="flex justify-between items-center mb-4 text-sm">
+                        <span className="text-gray-500">Stock:</span>
+                        <span className={`font-medium ${item.stock_quantity > 10 ? 'text-success-600' : item.stock_quantity > 0 ? 'text-warning-600' : 'text-error-600'}`}>
+                          {item.stock_quantity > 0 ? `${item.stock_quantity} remaining` : 'Out of stock'}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {item.fulfillment_instructions && (
+                      <div className="bg-gray-50 p-3 rounded-lg mb-4 flex items-start space-x-2">
+                        <Info className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                        <p className="text-xs text-gray-500">{item.fulfillment_instructions}</p>
+                      </div>
+                    )}
+                    
+                    <button
+                      onClick={() => handleRedeem(item)}
+                      disabled={totalPoints < item.points_cost || redeemingItem === item.id || (item.stock_quantity !== null && item.stock_quantity <= 0)}
+                      className={`w-full py-3 rounded-lg font-medium transition-all ${
+                        totalPoints >= item.points_cost && redeemingItem !== item.id && (item.stock_quantity === null || item.stock_quantity > 0)
+                          ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 transform hover:scale-105'
+                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {redeemingItem === item.id
+                        ? 'Processing...'
+                        : item.stock_quantity !== null && item.stock_quantity <= 0
+                        ? 'Out of Stock'
+                        : totalPoints < item.points_cost
+                        ? 'Insufficient Points'
+                        : 'Redeem Now'
+                      }
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Redemption History Tab */}
+        {activeTab === 'history' && (
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+              <Package className="h-5 w-5 mr-2 text-primary-600" />
+              Your Redemption History
+            </h2>
+            
+            {redeemedItems.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50 rounded-lg">
+                <ShoppingBag className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No redemptions yet</h3>
+                <p className="text-gray-600 mb-4">
+                  You haven't redeemed any items from the store yet.
+                </p>
+                <button
+                  onClick={() => setActiveTab('store')}
+                  className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors"
+                >
+                  Browse Reward Store
                 </button>
               </div>
-            ))}
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Item
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Points
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Redeemed On
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {redeemedItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="text-2xl mr-3">
+                              {item.item_id.includes('amazon') ? '🎁' : 
+                               item.item_id.includes('netflix') ? '📺' : 
+                               item.item_id.includes('spotify') ? '🎵' : 
+                               item.item_id.includes('paypal') ? '💰' : 
+                               item.item_id.includes('bank') ? '🏦' : 
+                               item.item_id.includes('mouse') ? '🖱️' : 
+                               item.item_id.includes('earbuds') ? '🎧' : 
+                               item.item_id.includes('shirt') ? '👕' : '🏆'}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{item.item_name}</div>
+                              <div className="text-sm text-gray-500">{item.item_id}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{item.points_cost.toLocaleString()}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            item.status === 'pending_fulfillment' ? 'bg-warning-100 text-warning-800' :
+                            item.status === 'fulfilled' ? 'bg-success-100 text-success-800' :
+                            'bg-error-100 text-error-800'
+                          }`}>
+                            {item.status === 'pending_fulfillment' ? 'Pending' :
+                             item.status === 'fulfilled' ? 'Fulfilled' : 'Cancelled'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(item.redeemed_at).toLocaleDateString()} {new Date(item.redeemed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>

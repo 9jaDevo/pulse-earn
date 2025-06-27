@@ -36,17 +36,8 @@ export class ProfileService {
         errorMessage: error?.message
       });
 
-      if (error) {
-        // Handle the specific case where no profile exists (PGRST116 with 0 rows)
-        if (error.code === 'PGRST116') {
-          console.log('[ProfileService] No profile found (PGRST116), returning null without error');
-          return { data: null, error: null };
-        }
+      if (error && error.code !== 'PGRST116') {
         return { data: null, error: error.message };
-      }
-
-      if (!data) {
-        console.warn('[ProfileService] No profile data returned but no error either');
       }
 
       return { data, error: null };
@@ -104,7 +95,7 @@ export class ProfileService {
         })
         .eq('id', userId)
         .select()
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] Profile update result:', { 
         success: !error, 
@@ -126,26 +117,102 @@ export class ProfileService {
   }
 
   /**
+   * Admin update of a user's profile
+   * This allows admins to update any user's profile including role and suspension status
+   */
+  static async adminUpdateUserProfile(
+    adminId: string,
+    userId: string,
+    updates: ProfileUpdate
+  ): Promise<ServiceResponse<Profile>> {
+    console.log('[ProfileService] Admin updating profile for user:', userId, 'by admin:', adminId, 'with updates:', updates);
+    try {
+      // First check if the requesting user is an admin
+      const { data: adminProfile, error: adminError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .maybeSingle();
+
+      if (adminError || !adminProfile || adminProfile.role !== 'admin') {
+        return { 
+          data: null, 
+          error: 'Unauthorized: Only admins can perform this action' 
+        };
+      }
+
+      // Perform the update
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          ...updates, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      console.log('[ProfileService] Admin profile update result:', { 
+        success: !error, 
+        hasData: !!data,
+        errorMessage: error?.message
+      });
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      // Log the admin action
+      await supabase
+        .from('moderator_actions')
+        .insert({
+          moderator_id: adminId,
+          action_type: 'update_user_profile',
+          target_id: userId,
+          target_table: 'profiles',
+          reason: 'Admin user profile update',
+          metadata: { 
+            updates: { ...updates },
+            suspended: updates.is_suspended !== undefined ? updates.is_suspended : null,
+            role_change: updates.role !== undefined ? updates.role : null
+          }
+        });
+
+      return { data, error: null };
+    } catch (error) {
+      return { 
+        data: null, 
+        error: error instanceof Error ? error.message : 'Failed to update user profile' 
+      };
+    }
+  }
+
+  /**
    * Fetch multiple profiles (for leaderboards, etc.)
    */
   static async fetchProfiles(
     options: {
       limit?: number;
+      offset?: number;
       orderBy?: 'points' | 'created_at';
       order?: 'asc' | 'desc';
       role?: Profile['role'];
       country?: string;
     } = {}
-  ): Promise<ServiceResponse<Profile[]>> {
+  ): Promise<ServiceResponse<{
+    profiles: Profile[];
+    totalCount: number;
+  }>> {
     console.log('[ProfileService] Fetching profiles with options:', options);
     try {
-      const { limit = 50, orderBy = 'points', order = 'desc', role, country } = options;
+      const { limit = 50, offset = 0, orderBy = 'points', order = 'desc', role, country } = options;
 
+      // Build the query for profiles
       let query = supabase
         .from('profiles')
         .select('*')
         .order(orderBy, { ascending: order === 'asc' })
-        .limit(limit);
+        .range(offset, offset + limit - 1);
 
       if (role) {
         query = query.eq('role', role);
@@ -155,18 +222,51 @@ export class ProfileService {
         query = query.eq('country', country);
       }
 
-      const { data, error } = await query;
+      // Get total count in a separate query
+      let countQuery = supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true });
+
+      if (role) {
+        countQuery = countQuery.eq('role', role);
+      }
+
+      if (country) {
+        countQuery = countQuery.eq('country', country);
+      }
+
+      // Run both queries in parallel
+      const [profilesResult, countResult] = await Promise.all([
+        query,
+        countQuery
+      ]);
+
+      const { data, error } = profilesResult;
+      const { count, error: countError } = countResult;
 
       console.log('[ProfileService] Profiles fetch result:', { 
         success: !error, 
-        count: data?.length || 0
+        count: data?.length || 0,
+        totalCount: count || 0,
+        error: error?.message,
+        countError: countError?.message
       });
 
       if (error) {
         return { data: null, error: error.message };
       }
 
-      return { data: data || [], error: null };
+      if (countError) {
+        return { data: null, error: countError.message };
+      }
+
+      return { 
+        data: { 
+          profiles: data || [], 
+          totalCount: count || 0 
+        }, 
+        error: null 
+      };
     } catch (error) {
       return { 
         data: null, 
@@ -189,11 +289,17 @@ export class ProfileService {
         .from('profiles')
         .select('points')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] Current profile fetch result:', { success: !fetchError, points: currentProfile?.points });
       if (fetchError) {
         return { data: null, error: fetchError.message };
+      }
+
+      // If no profile found, return error
+      if (!currentProfile) {
+        console.log('[ProfileService] No profile found for user, returning error');
+        return { data: null, error: 'User profile not found' };
       }
 
       const newPoints = (currentProfile?.points || 0) + pointsToAdd;
@@ -206,7 +312,7 @@ export class ProfileService {
         })
         .eq('id', userId)
         .select()
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] Points update result:', { 
         success: !error, 
@@ -240,7 +346,7 @@ export class ProfileService {
         .from('profiles')
         .select('badges')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] Current profile badges fetch result:', { success: !fetchError, badges: currentProfile?.badges });
       if (fetchError) {
@@ -265,7 +371,7 @@ export class ProfileService {
         })
         .eq('id', userId)
         .select()
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] Badge add result:', { 
         success: !error, 
@@ -329,17 +435,23 @@ export class ProfileService {
         .from('profiles')
         .select('points')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       console.log('[ProfileService] User points fetch result:', { success: !userError, points: userProfile?.points });
       if (userError) {
         return { data: null, error: userError.message };
       }
 
+      // If no profile found, return rank 0
+      if (!userProfile) {
+        console.log('[ProfileService] No profile found for user, returning rank 0');
+        return { data: 0, error: null };
+      }
+
       // Count users with more points
       const { count, error: countError } = await supabase
         .from('profiles')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .gt('points', userProfile.points);
 
       console.log('[ProfileService] Rank calculation result:', { success: !countError, usersWithMorePoints: count });
@@ -366,6 +478,7 @@ export const {
   fetchProfileById,
   createProfile,
   updateUserProfile,
+  adminUpdateUserProfile,
   fetchProfiles,
   updateUserPoints,
   addBadgeToUser,

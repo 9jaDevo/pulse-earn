@@ -182,6 +182,12 @@ export class BadgeService {
               progress = Math.min(userStats.triviaCompleted, criteria.count || 1);
               maxProgress = criteria.count || 1;
               break;
+            case 'trivia_perfect':
+              // This would require additional data tracking in the database
+              // For now, we'll use a simplified approach
+              progress = userStats.perfectTriviaGames;
+              maxProgress = 1;
+              break;
             case 'total_points':
               progress = Math.min(profile.points, criteria.count || 1);
               maxProgress = criteria.count || 1;
@@ -194,6 +200,10 @@ export class BadgeService {
               progress = Math.min(userStats.spinWins, criteria.count || 1);
               maxProgress = criteria.count || 1;
               break;
+            case 'spin_jackpot':
+              progress = Math.min(userStats.jackpotSpins, criteria.count || 1);
+              maxProgress = criteria.count || 1;
+              break;
             case 'ads_watched':
               progress = Math.min(userStats.adsWatched, criteria.count || 1);
               maxProgress = criteria.count || 1;
@@ -201,6 +211,15 @@ export class BadgeService {
             case 'referrals':
               progress = Math.min(userStats.referrals, criteria.count || 1);
               maxProgress = criteria.count || 1;
+              break;
+            case 'early_adopter':
+              // Check if user joined before the specified date
+              if (criteria.before) {
+                const beforeDate = new Date(criteria.before);
+                const userCreatedAt = new Date(profile.created_at);
+                progress = userCreatedAt < beforeDate ? 1 : 0;
+              }
+              maxProgress = 1;
               break;
             default:
               progress = 0;
@@ -272,8 +291,10 @@ export class BadgeService {
     pollVotes: number;
     pollsCreated: number;
     triviaCompleted: number;
+    perfectTriviaGames: number;
     currentStreak: number;
     spinWins: number;
+    jackpotSpins: number;
     adsWatched: number;
     referrals: number;
   }> {
@@ -304,6 +325,14 @@ export class BadgeService {
         .eq('user_id', userId)
         .eq('reward_type', 'trivia');
 
+      // Get perfect trivia games count (score = 100% on hard difficulty)
+      const { count: perfectTriviaGames } = await supabase
+        .from('daily_reward_history')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('reward_type', 'trivia')
+        .contains('reward_data', { score: 100, difficulty: 'hard' });
+
       // Get spin wins count (successful spins)
       const { count: spinWins } = await supabase
         .from('daily_reward_history')
@@ -312,14 +341,30 @@ export class BadgeService {
         .eq('reward_type', 'spin')
         .gt('points_earned', 0);
 
+      // Get jackpot spins count (250 points)
+      const { count: jackpotSpins } = await supabase
+        .from('daily_reward_history')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('reward_type', 'spin')
+        .eq('points_earned', 250);
+
+      // Get referrals count
+      const { count: referrals } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('referred_by', userId);
+
       return {
         pollVotes: pollVotes || 0,
         pollsCreated: pollsCreated || 0,
         triviaCompleted: triviaCompleted || 0,
+        perfectTriviaGames: perfectTriviaGames || 0,
         currentStreak: dailyRewards?.trivia_streak || 0,
         spinWins: spinWins || 0,
+        jackpotSpins: jackpotSpins || 0,
         adsWatched: dailyRewards?.total_ads_watched || 0,
-        referrals: 0 // TODO: Implement referral system
+        referrals: referrals || 0
       };
     } catch (error) {
       console.error('Error getting user statistics:', error);
@@ -327,8 +372,10 @@ export class BadgeService {
         pollVotes: 0,
         pollsCreated: 0,
         triviaCompleted: 0,
+        perfectTriviaGames: 0,
         currentStreak: 0,
         spinWins: 0,
+        jackpotSpins: 0,
         adsWatched: 0,
         referrals: 0
       };
