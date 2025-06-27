@@ -21,6 +21,7 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { useScrollToTop } from './hooks/useScrollToTop';
 import { useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/Toast';
+import { CookieConsentBanner } from './components/layout/CookieConsentBanner';
 
 // Component to handle referral codes from URL
 const ReferralHandler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -121,6 +122,7 @@ function App() {
               </Routes>
             </main>
             <Footer />
+            <CookieConsentBanner />
           </div>
         </ReferralHandler>
         <Toaster />
