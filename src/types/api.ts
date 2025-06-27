@@ -406,3 +406,20 @@ export interface RedeemedItem {
   redeemed_at: string;
   updated_at: string;
 }
+
+// Reward Store Items Types
+export interface RewardStoreItem {
+  id: string;
+  name: string;
+  description?: string;
+  item_type: 'gift_card' | 'subscription_code' | 'paypal_payout' | 'bank_transfer' | 'physical_item';
+  points_cost: number;
+  value?: string;
+  currency?: string;
+  image_url?: string;
+  fulfillment_instructions?: string;
+  is_active: boolean;
+  stock_quantity?: number;
+  created_at: string;
+  updated_at: string;
+}

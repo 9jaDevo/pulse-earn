@@ -11,11 +11,14 @@ import type {
   DailyRewardHistory,
   RedeemItemRequest,
   RedeemItemResult,
-  RedeemedItem
+  RedeemedItem,
+  RewardStoreItem
 } from '../types/api';
 
 export interface TriviaGameSummary {
   id: string;
+  title: string;
+  description?: string;
   category: string;
   difficulty: 'easy' | 'medium' | 'hard';
   questionCount: number;
@@ -863,7 +866,24 @@ export class RewardService {
         };
       }
 
-      // 2. Deduct points from user's profile
+      // 2. Check if the item exists and is available
+      const { data: storeItem, error: storeItemError } = await supabase
+        .from('reward_store_items')
+        .select('*')
+        .eq('id', request.itemId)
+        .eq('is_active', true)
+        .single();
+
+      if (storeItemError) {
+        return { data: null, error: 'Item not found or no longer available' };
+      }
+
+      // 3. Check if there's enough stock
+      if (storeItem.stock_quantity !== null && storeItem.stock_quantity <= 0) {
+        return { data: null, error: 'This item is out of stock' };
+      }
+
+      // 4. Deduct points from user's profile
       // Note: ProfileService.updateUserPoints adds points, so we pass a negative value to deduct
       const { data: updatedProfile, error: pointsError } = await ProfileService.updateUserPoints(
         userId,
@@ -878,7 +898,7 @@ export class RewardService {
         return { data: null, error: 'Failed to update user points.' };
       }
 
-      // 3. Record the redemption in the redeemed_items table
+      // 5. Record the redemption in the redeemed_items table
       const { data: redeemedItemRecord, error: recordError } = await supabase
         .from('redeemed_items')
         .insert({
@@ -898,7 +918,18 @@ export class RewardService {
         return { data: null, error: recordError.message };
       }
 
-      // 4. Record in reward history for tracking
+      // 6. Update item stock if applicable
+      if (storeItem.stock_quantity !== null) {
+        await supabase
+          .from('reward_store_items')
+          .update({ 
+            stock_quantity: storeItem.stock_quantity - 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', request.itemId);
+      }
+
+      // 7. Record in reward history for tracking
       await supabase
         .from('daily_reward_history')
         .insert({
@@ -966,6 +997,178 @@ export class RewardService {
       };
     }
   }
+
+  /**
+   * Get reward store items
+   */
+  static async getRewardStoreItems(
+    options: {
+      limit?: number;
+      itemType?: string;
+      minPoints?: number;
+      maxPoints?: number;
+      inStock?: boolean;
+    } = {}
+  ): Promise<ServiceResponse<RewardStoreItem[]>> {
+    try {
+      const { limit = 50, itemType, minPoints, maxPoints, inStock } = options;
+
+      let query = supabase
+        .from('reward_store_items')
+        .select('*')
+        .eq('is_active', true)
+        .order('points_cost', { ascending: true })
+        .limit(limit);
+
+      if (itemType) {
+        query = query.eq('item_type', itemType);
+      }
+
+      if (minPoints !== undefined) {
+        query = query.gte('points_cost', minPoints);
+      }
+
+      if (maxPoints !== undefined) {
+        query = query.lte('points_cost', maxPoints);
+      }
+
+      if (inStock === true) {
+        query = query.or('stock_quantity.gt.0,stock_quantity.is.null');
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      return { data: data || [], error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get reward store items'
+      };
+    }
+  }
+
+  /**
+   * Create a new reward store item (admin only)
+   */
+  static async createRewardStoreItem(
+    adminId: string,
+    itemData: Omit<RewardStoreItem, 'id' | 'created_at' | 'updated_at'>
+  ): Promise<ServiceResponse<RewardStoreItem>> {
+    try {
+      // Check if user is admin
+      const { data: adminProfile, error: adminError } = await ProfileService.fetchProfileById(adminId);
+      
+      if (adminError || !adminProfile || adminProfile.role !== 'admin') {
+        return { data: null, error: 'Unauthorized: Only admins can create reward items' };
+      }
+
+      const { data, error } = await supabase
+        .from('reward_store_items')
+        .insert(itemData)
+        .select()
+        .single();
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to create reward store item'
+      };
+    }
+  }
+
+  /**
+   * Update a reward store item (admin only)
+   */
+  static async updateRewardStoreItem(
+    adminId: string,
+    itemId: string,
+    updates: Partial<Omit<RewardStoreItem, 'id' | 'created_at' | 'updated_at'>>
+  ): Promise<ServiceResponse<RewardStoreItem>> {
+    try {
+      // Check if user is admin
+      const { data: adminProfile, error: adminError } = await ProfileService.fetchProfileById(adminId);
+      
+      if (adminError || !adminProfile || adminProfile.role !== 'admin') {
+        return { data: null, error: 'Unauthorized: Only admins can update reward items' };
+      }
+
+      const { data, error } = await supabase
+        .from('reward_store_items')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', itemId)
+        .select()
+        .single();
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to update reward store item'
+      };
+    }
+  }
+
+  /**
+   * Update redemption status (admin only)
+   */
+  static async updateRedemptionStatus(
+    adminId: string,
+    redemptionId: string,
+    status: 'pending_fulfillment' | 'fulfilled' | 'cancelled',
+    fulfillmentDetails?: Record<string, any>
+  ): Promise<ServiceResponse<RedeemedItem>> {
+    try {
+      // Check if user is admin
+      const { data: adminProfile, error: adminError } = await ProfileService.fetchProfileById(adminId);
+      
+      if (adminError || !adminProfile || adminProfile.role !== 'admin') {
+        return { data: null, error: 'Unauthorized: Only admins can update redemption status' };
+      }
+
+      const updates: any = {
+        status,
+        updated_at: new Date().toISOString()
+      };
+
+      if (fulfillmentDetails) {
+        updates.fulfillment_details = fulfillmentDetails;
+      }
+
+      const { data, error } = await supabase
+        .from('redeemed_items')
+        .update(updates)
+        .eq('id', redemptionId)
+        .select()
+        .single();
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to update redemption status'
+      };
+    }
+  }
 }
 
 // Export individual functions for backward compatibility and easier testing
@@ -983,5 +1186,9 @@ export const {
   getTriviaQuestions,
   resetDailyRewards,
   redeemStoreItem,
-  getRedeemedItems
+  getRedeemedItems,
+  getRewardStoreItems,
+  createRewardStoreItem,
+  updateRewardStoreItem,
+  updateRedemptionStatus
 } = RewardService;

@@ -7,11 +7,12 @@ import {
   Shield, 
   Settings,
   LogOut,
-  Zap
+  Zap,
+  Gift
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-type AdminSection = 'overview' | 'users' | 'content' | 'analytics' | 'moderation' | 'settings';
+type AdminSection = 'overview' | 'users' | 'content' | 'analytics' | 'moderation' | 'settings' | 'rewards';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
@@ -54,6 +55,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       label: 'Moderation',
       icon: Shield,
       description: 'Content moderation'
+    },
+    {
+      id: 'rewards' as AdminSection,
+      label: 'Reward Store',
+      icon: Gift,
+      description: 'Manage rewards and redemptions'
     },
     {
       id: 'settings' as AdminSection,
