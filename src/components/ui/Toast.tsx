@@ -16,13 +16,13 @@ export const Toast: React.FC<ToastProps> = ({ t, onDismiss }) => {
   const getIcon = () => {
     switch (type) {
       case 'success':
-        return <CheckCircle className="h-5 w-5 text-success-500" />;
+        return <CheckCircle className="h-5 w-5 text-success-500 dark:text-success-400" />;
       case 'error':
-        return <AlertCircle className="h-5 w-5 text-error-500" />;
+        return <AlertCircle className="h-5 w-5 text-error-500 dark:text-error-400" />;
       case 'info':
-        return <Info className="h-5 w-5 text-primary-500" />;
+        return <Info className="h-5 w-5 text-primary-500 dark:text-primary-400" />;
       case 'warning':
-        return <AlertTriangle className="h-5 w-5 text-warning-500" />;
+        return <AlertTriangle className="h-5 w-5 text-warning-500 dark:text-warning-400" />;
     }
   };
 
@@ -31,30 +31,30 @@ export const Toast: React.FC<ToastProps> = ({ t, onDismiss }) => {
     
     switch (type) {
       case 'success':
-        return `${baseStyles} bg-success-50/95 border-success-200`;
+        return `${baseStyles} bg-success-50/95 dark:bg-success-900/90 border-success-200 dark:border-success-800`;
       case 'error':
-        return `${baseStyles} bg-error-50/95 border-error-200`;
+        return `${baseStyles} bg-error-50/95 dark:bg-error-900/90 border-error-200 dark:border-error-800`;
       case 'info':
-        return `${baseStyles} bg-primary-50/95 border-primary-200`;
+        return `${baseStyles} bg-primary-50/95 dark:bg-primary-900/90 border-primary-200 dark:border-primary-800`;
       case 'warning':
-        return `${baseStyles} bg-warning-50/95 border-warning-200`;
+        return `${baseStyles} bg-warning-50/95 dark:bg-warning-900/90 border-warning-200 dark:border-warning-800`;
       default:
-        return `${baseStyles} bg-white/95 border-gray-200`;
+        return `${baseStyles} bg-white/95 dark:bg-gray-800/90 border-gray-200 dark:border-gray-700`;
     }
   };
 
   const getTextColor = () => {
     switch (type) {
       case 'success':
-        return 'text-success-800';
+        return 'text-success-800 dark:text-success-200';
       case 'error':
-        return 'text-error-800';
+        return 'text-error-800 dark:text-error-200';
       case 'info':
-        return 'text-primary-800';
+        return 'text-primary-800 dark:text-primary-200';
       case 'warning':
-        return 'text-warning-800';
+        return 'text-warning-800 dark:text-warning-200';
       default:
-        return 'text-gray-800';
+        return 'text-gray-800 dark:text-gray-200';
     }
   };
 
@@ -74,7 +74,7 @@ export const Toast: React.FC<ToastProps> = ({ t, onDismiss }) => {
       </div>
       <button
         onClick={onDismiss}
-        className="flex-shrink-0 text-gray-400 hover:text-gray-500 transition-colors rounded-full p-1.5 hover:bg-gray-200/50 focus:outline-none focus:ring-2 focus:ring-gray-300"
+        className="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 transition-colors rounded-full p-1.5 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-600"
         aria-label="Close notification"
       >
         <X className="h-4 w-4" />

@@ -379,3 +379,47 @@ export interface ContentReportCreateRequest {
   content_id: string;
   reason: string;
 }
+
+// Reward Store Types
+export interface RedeemItemRequest {
+  itemId: string;
+  itemName: string;
+  pointsCost: number;
+  fulfillmentDetails?: Record<string, any>;
+}
+
+export interface RedeemItemResult {
+  success: boolean;
+  message: string;
+  newPointsBalance?: number;
+  redeemedItemId?: string;
+}
+
+export interface RedeemedItem {
+  id: string;
+  user_id: string;
+  item_id: string;
+  item_name: string;
+  points_cost: number;
+  status: 'pending_fulfillment' | 'fulfilled' | 'cancelled';
+  fulfillment_details?: Record<string, any>;
+  redeemed_at: string;
+  updated_at: string;
+}
+
+// Reward Store Items Types
+export interface RewardStoreItem {
+  id: string;
+  name: string;
+  description?: string;
+  item_type: 'gift_card' | 'subscription_code' | 'paypal_payout' | 'bank_transfer' | 'physical_item';
+  points_cost: number;
+  value?: string;
+  currency?: string;
+  image_url?: string;
+  fulfillment_instructions?: string;
+  is_active: boolean;
+  stock_quantity?: number;
+  created_at: string;
+  updated_at: string;
+}
