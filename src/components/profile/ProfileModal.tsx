@@ -44,9 +44,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       if (error) {
         setError(error);
         errorToast('Failed to update profile: ' + error);
-        errorToast('Failed to update profile: ' + error);
       } else {
-        successToast('Profile updated successfully!');
         successToast('Profile updated successfully!');
         setTimeout(() => {          
         }, 2000);
@@ -62,7 +60,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const copyReferralCode = () => {
     if (profile?.referral_code) {
       navigator.clipboard.writeText(profile.referral_code);
-      successToast('Referral code copied to clipboard!');
       successToast('Referral code copied to clipboard!');
       setCopiedReferral(true);
       setTimeout(() => setCopiedReferral(false), 2000);
@@ -94,10 +91,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setUploadingAvatar(true);
     
     try {
-      // Create a unique file name
+      // Create a unique file name with user ID as folder structure
       const fileExt = file.name.split('.').pop();
-      const fileName = `${profile.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `${profile.id}/${fileName}`;
       
       // Upload the file to Supabase Storage
       const { error: uploadError } = await supabase.storage
