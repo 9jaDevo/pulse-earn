@@ -16,7 +16,13 @@ import { PollService } from '../../services/pollService';
 import { PromotedPollService } from '../../services/promotedPollService';
 import { PaymentService } from '../../services/paymentService';
 import { useToast } from '../../hooks/useToast';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements } from '@stripe/react-stripe-js';
+import { StripePaymentForm } from './StripePaymentForm';
 import type { Poll, PaymentMethod } from '../../types/api';
+
+// Initialize Stripe outside of component to avoid re-initialization
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
 
 interface CreatePromotedPollModalProps {
   isOpen: boolean;
@@ -41,6 +47,10 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  
+  // Stripe payment state
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [transactionId, setTransactionId] = useState<string | null>(null);
   
   // Promotion settings
   const [settings, setSettings] = useState<{
@@ -233,19 +243,72 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         }
         
         successToast('Payment successful! Your poll promotion is pending approval.');
+        onSuccess();
+        onClose();
+      } else if (selectedMethod.type === 'stripe') {
+        // Initialize Stripe payment
+        const { data: stripeData, error: stripeError } = await PaymentService.initializeStripePayment(
+          user.id,
+          formData.budget,
+          promotedPoll.id
+        );
+        
+        if (stripeError) {
+          throw new Error(stripeError);
+        }
+        
+        if (!stripeData) {
+          throw new Error('Failed to initialize Stripe payment');
+        }
+        
+        // Set client secret and transaction ID for Stripe Elements
+        setClientSecret(stripeData.clientSecret);
+        setTransactionId(stripeData.transactionId);
+        
+        // Don't close modal yet - user needs to complete Stripe payment
+        setLoading(false);
       } else {
-        // For other payment methods, we would redirect to the payment gateway
-        // This is a placeholder for now
+        // For other payment methods (PayPal, Paystack)
+        // This would be implemented similarly to Stripe
         successToast('Your poll promotion has been created and is pending payment and approval.');
+        onSuccess();
+        onClose();
+      }
+    } catch (err) {
+      errorToast(err instanceof Error ? err.message : 'Failed to create promoted poll');
+      setLoading(false);
+    }
+  };
+  
+  const handleStripePaymentSuccess = async (paymentIntentId: string) => {
+    if (!transactionId) {
+      errorToast('Transaction ID not found');
+      return;
+    }
+    
+    try {
+      // Update transaction status
+      const { error } = await PaymentService.updateTransactionStatus(
+        transactionId,
+        'completed',
+        paymentIntentId
+      );
+      
+      if (error) {
+        throw new Error(error);
       }
       
+      successToast('Payment successful! Your poll promotion is pending approval.');
       onSuccess();
       onClose();
     } catch (err) {
-      errorToast(err instanceof Error ? err.message : 'Failed to create promoted poll');
-    } finally {
-      setLoading(false);
+      errorToast(err instanceof Error ? err.message : 'Failed to update payment status');
     }
+  };
+  
+  const handleStripePaymentError = (error: string) => {
+    errorToast(`Payment failed: ${error}`);
+    // Don't close modal, allow user to try again
   };
   
   // Filter polls based on search term
@@ -526,7 +589,14 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                 {paymentMethods.map(method => (
                   <div
                     key={method.id}
-                    onClick={() => setSelectedPaymentMethod(method.id)}
+                    onClick={() => {
+                      setSelectedPaymentMethod(method.id);
+                      // Reset Stripe state when changing payment method
+                      if (method.type !== 'stripe') {
+                        setClientSecret(null);
+                        setTransactionId(null);
+                      }
+                    }}
                     className={`flex items-center p-4 border rounded-lg cursor-pointer transition-all ${
                       selectedPaymentMethod === method.id 
                         ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200' 
@@ -566,33 +636,49 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
               </div>
             </div>
             
-            {/* Payment Summary */}
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h4 className="font-medium text-gray-900 mb-3">Payment Summary</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Promotion Budget:</span>
-                  <span className="font-medium">${formData.budget.toFixed(2)}</span>
-                </div>
-                
-                {/* If wallet payment, show points conversion */}
-                {selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && (
+            {/* Stripe Payment Form */}
+            {selectedPaymentMethod === paymentMethods.find(m => m.type === 'stripe')?.id && clientSecret && (
+              <div className="mt-6">
+                <Elements stripe={stripePromise} options={{ clientSecret }}>
+                  <StripePaymentForm 
+                    amount={formData.budget}
+                    transactionId={transactionId || ''}
+                    onSuccess={handleStripePaymentSuccess}
+                    onError={handleStripePaymentError}
+                  />
+                </Elements>
+              </div>
+            )}
+            
+            {/* Payment Summary (only show if not using Stripe or Stripe not initialized) */}
+            {(selectedPaymentMethod !== paymentMethods.find(m => m.type === 'stripe')?.id || !clientSecret) && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-3">Payment Summary</h4>
+                <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Points Required:</span>
-                    <span className="font-medium">
-                      {(formData.budget * settings.points_to_usd_conversion).toLocaleString()} points
-                    </span>
+                    <span className="text-gray-600">Promotion Budget:</span>
+                    <span className="font-medium">${formData.budget.toFixed(2)}</span>
                   </div>
-                )}
-                
-                <div className="pt-2 border-t border-gray-200 mt-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-800 font-medium">Total:</span>
-                    <span className="font-bold text-gray-900">${formData.budget.toFixed(2)}</span>
+                  
+                  {/* If wallet payment, show points conversion */}
+                  {selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Points Required:</span>
+                      <span className="font-medium">
+                        {(formData.budget * settings.points_to_usd_conversion).toLocaleString()} points
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div className="pt-2 border-t border-gray-200 mt-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-800 font-medium">Total:</span>
+                      <span className="font-bold text-gray-900">${formData.budget.toFixed(2)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
             
             {/* Insufficient Points Warning */}
             {selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && 
@@ -618,6 +704,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
             <button
               onClick={() => setStep(step === 'configure' ? 'select-poll' : 'configure')}
               className="px-6 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              disabled={loading}
             >
               Back
             </button>
@@ -643,7 +730,9 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
             </button>
           )}
           
-          {step === 'payment' && (
+          {/* Only show the payment button if not using Stripe or Stripe not initialized */}
+          {step === 'payment' && 
+           (selectedPaymentMethod !== paymentMethods.find(m => m.type === 'stripe')?.id || !clientSecret) && (
             <button
               onClick={handlePayment}
               disabled={loading || (
