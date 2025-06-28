@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, DollarSign, Bank, AlertCircle, Info } from 'lucide-react';
+import { CreditCard, DollarSign, Ban as Bank, AlertCircle, Info } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PayoutService } from '../../services/payoutService';
 import { useToast } from '../../hooks/useToast';
