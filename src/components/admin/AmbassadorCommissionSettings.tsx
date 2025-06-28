@@ -16,19 +16,12 @@ import { useToast } from '../../hooks/useToast';
 import { supabase } from '../../lib/supabase';
 import { CountrySelect } from '../ui/CountrySelect';
 import { Pagination } from '../ui/Pagination';
-
-interface CommissionTier {
-  id: string;
-  name: string;
-  min_referrals: number;
-  global_rate: number;
-  country_rates: Record<string, number>;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import { AmbassadorService } from '../../services/ambassadorService';
+import { useAuth } from '../../contexts/AuthContext';
+import type { CommissionTier } from '../../types/api';
 
 export const AmbassadorCommissionSettings: React.FC = () => {
+  const { user } = useAuth();
   const { successToast, errorToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -71,33 +64,25 @@ export const AmbassadorCommissionSettings: React.FC = () => {
   const fetchCommissionTiers = async () => {
     setLoading(true);
     try {
-      // Calculate pagination
-      const from = (currentPage - 1) * itemsPerPage;
-      const to = from + itemsPerPage - 1;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
       
-      // Fetch tiers with pagination
-      const { data, error, count } = await supabase
-        .from('ambassador_commission_tiers')
-        .select('*', { count: 'exact' })
-        .order('min_referrals', { ascending: true })
-        .range(from, to);
+      const { data, error } = await AmbassadorService.getCommissionTiers({
+        limit: itemsPerPage,
+        offset: (currentPage - 1) * itemsPerPage
+      });
       
       if (error) {
         throw error;
       }
       
-      // Transform country_rates from JSONB to Record<string, number>
-      const transformedTiers = (data || []).map(tier => ({
-        ...tier,
-        country_rates: tier.country_rates || {}
-      }));
-      
-      setTiers(transformedTiers);
-      setTotalItems(count || 0);
+      setTiers(data?.tiers || []);
+      setTotalItems(data?.totalCount || 0);
       
       // Initialize expanded state for new tiers
       const newExpandedState = { ...expandedTiers };
-      transformedTiers.forEach(tier => {
+      (data?.tiers || []).forEach(tier => {
         if (newExpandedState[tier.id] === undefined) {
           newExpandedState[tier.id] = false;
         }
@@ -112,6 +97,11 @@ export const AmbassadorCommissionSettings: React.FC = () => {
   };
 
   const handleSaveTier = async () => {
+    if (!user) {
+      errorToast('You must be logged in to perform this action');
+      return;
+    }
+    
     if (!newTier.name.trim()) {
       errorToast('Tier name is required');
       return;
@@ -133,35 +123,36 @@ export const AmbassadorCommissionSettings: React.FC = () => {
       // Check if we're editing or creating
       if (editingTierId) {
         // Update existing tier
-        const { error } = await supabase
-          .from('ambassador_commission_tiers')
-          .update({
+        const { error } = await AmbassadorService.updateCommissionTier(
+          user.id,
+          editingTierId,
+          {
             name: newTier.name,
             min_referrals: newTier.min_referrals,
             global_rate: newTier.global_rate,
-            country_rates: newTier.country_rates,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingTierId);
+            country_rates: newTier.country_rates
+          }
+        );
         
         if (error) {
-          throw error;
+          throw new Error(error);
         }
         
         successToast('Commission tier updated successfully');
       } else {
         // Create new tier
-        const { error } = await supabase
-          .from('ambassador_commission_tiers')
-          .insert({
+        const { error } = await AmbassadorService.createCommissionTier(
+          user.id,
+          {
             name: newTier.name,
             min_referrals: newTier.min_referrals,
             global_rate: newTier.global_rate,
             country_rates: newTier.country_rates
-          });
+          }
+        );
         
         if (error) {
-          throw error;
+          throw new Error(error);
         }
         
         successToast('Commission tier created successfully');
@@ -186,18 +177,20 @@ export const AmbassadorCommissionSettings: React.FC = () => {
   };
 
   const handleDeleteTier = async (tierId: string) => {
+    if (!user) {
+      errorToast('You must be logged in to perform this action');
+      return;
+    }
+    
     if (!confirm('Are you sure you want to delete this commission tier?')) {
       return;
     }
     
     try {
-      const { error } = await supabase
-        .from('ambassador_commission_tiers')
-        .delete()
-        .eq('id', tierId);
+      const { error } = await AmbassadorService.deleteCommissionTier(user.id, tierId);
       
       if (error) {
-        throw error;
+        throw new Error(error);
       }
       
       successToast('Commission tier deleted successfully');
@@ -209,17 +202,20 @@ export const AmbassadorCommissionSettings: React.FC = () => {
   };
 
   const handleToggleTierStatus = async (tier: CommissionTier) => {
+    if (!user) {
+      errorToast('You must be logged in to perform this action');
+      return;
+    }
+    
     try {
-      const { error } = await supabase
-        .from('ambassador_commission_tiers')
-        .update({
-          is_active: !tier.is_active,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', tier.id);
+      const { error } = await AmbassadorService.updateCommissionTier(
+        user.id,
+        tier.id,
+        { is_active: !tier.is_active }
+      );
       
       if (error) {
-        throw error;
+        throw new Error(error);
       }
       
       successToast(`Tier ${tier.is_active ? 'deactivated' : 'activated'} successfully`);
