@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { AmbassadorService } from '../services/ambassadorService';
 import type { AmbassadorDetails, AmbassadorStats, CountryMetric } from '../types/api';
@@ -15,7 +15,7 @@ import {
   ExternalLink,
   Gift,
   Trophy,
-  BarChart3
+  Star
 } from 'lucide-react';
 
 export const AmbassadorPage: React.FC = () => {
@@ -70,7 +70,9 @@ export const AmbassadorPage: React.FC = () => {
     {
       label: 'Total Referrals',
       value: ambassadorData.stats?.totalReferrals.toString() || '0',
-      change: '+12 this month', // Would be calculated from metrics
+      change: ambassadorData.stats?.referralsToNextTier 
+        ? `${ambassadorData.stats.referralsToNextTier} to next tier` 
+        : 'Top tier reached',
       icon: Users,
       color: 'from-primary-500 to-primary-600'
     },
@@ -83,8 +85,10 @@ export const AmbassadorPage: React.FC = () => {
     },
     {
       label: 'Commission Rate',
-      value: `${ambassadorData.ambassador?.commission_rate || 15}%`,
-      change: 'Next tier: 20%',
+      value: `${ambassadorData.ambassador?.commission_rate || 0}%`,
+      change: ambassadorData.stats?.nextTierName 
+        ? `Next tier: ${ambassadorData.stats.nextTierName}` 
+        : 'Top tier reached',
       icon: TrendingUp,
       color: 'from-accent-500 to-accent-600'
     },
@@ -105,34 +109,40 @@ export const AmbassadorPage: React.FC = () => {
     { name: 'Mike T.', joined: '2 weeks ago', status: 'Active', earned: '$22.40' }
   ];
 
+  // Get tier information from stats
+  const currentTierName = ambassadorData.stats?.tierName || 'Bronze';
+  const nextTierName = ambassadorData.stats?.nextTierName;
+  const referralsToNextTier = ambassadorData.stats?.referralsToNextTier;
+  
+  // Define tiers based on data from the server
   const tierBenefits = [
     {
       tier: 'Bronze',
       requirement: '0-24 referrals',
       commission: '10%',
       bonuses: ['Welcome bonus', 'Monthly reports'],
-      current: false
+      current: currentTierName === 'Bronze'
     },
     {
       tier: 'Silver',
       requirement: '25-99 referrals',
       commission: '15%',
       bonuses: ['Priority support', 'Custom landing page', 'Performance bonuses'],
-      current: true
+      current: currentTierName === 'Silver'
     },
     {
       tier: 'Gold',
       requirement: '100-249 referrals',
       commission: '20%',
       bonuses: ['Dedicated manager', 'Exclusive events', 'Higher commission'],
-      current: false
+      current: currentTierName === 'Gold'
     },
     {
       tier: 'Platinum',
       requirement: '250+ referrals',
       commission: '25%',
       bonuses: ['Maximum commission', 'VIP treatment', 'Special recognition'],
-      current: false
+      current: currentTierName === 'Platinum'
     }
   ];
 
@@ -183,6 +193,14 @@ export const AmbassadorPage: React.FC = () => {
               'Earn real money by referring friends to PulseEarn. The more you share, the more you earn!'
             }
           </p>
+          {ambassadorData.stats?.tierName && (
+            <div className="mt-4">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800">
+                <Star className="h-4 w-4 mr-1" />
+                {ambassadorData.stats.tierName} Tier
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Stats Grid */}
@@ -360,9 +378,7 @@ export const AmbassadorPage: React.FC = () => {
               <div className="space-y-4">
                 {tierBenefits.map((tier, index) => {
                   const currentReferrals = ambassadorData.stats?.totalReferrals || 0;
-                  const isCurrent = tier.current || (
-                    tier.tier === 'Silver' && currentReferrals >= 25 && currentReferrals < 100
-                  );
+                  const isCurrent = tier.current;
                   
                   return (
                     <div

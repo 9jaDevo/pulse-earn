@@ -235,17 +235,6 @@ export interface PollVote {
   created_at: string;
 }
 
-export interface PollCreateRequest {
-  title: string;
-  description?: string;
-  options: string[];
-  type?: 'global' | 'country';
-  country?: string;
-  category: string;
-  start_date?: string;
-  active_until?: string;
-}
-
 export interface PollVoteRequest {
   poll_id: string;
   vote_option: number;
@@ -351,6 +340,20 @@ export interface AmbassadorStats {
   monthlyEarnings: number;
   conversionRate: number;
   countryRank: number;
+  tierName?: string;
+  nextTierName?: string;
+  referralsToNextTier?: number;
+}
+
+export interface CommissionTier {
+  id: string;
+  name: string;
+  min_referrals: number;
+  global_rate: number;
+  country_rates: Record<string, number>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 // Poll Comments Types
