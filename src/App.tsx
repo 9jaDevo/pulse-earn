@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useSearchParams } from 'react-r
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AdProvider } from './contexts/AdContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import { Header } from './components/layout/Header';
 import { HeaderAd } from './components/ads/HeaderAd';
 import { MobileAd } from './components/ads/MobileAd';
@@ -67,73 +68,75 @@ const AppDiagnostics: React.FC = () => {
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <AdProvider>
-          <Router>
-            <ReferralHandler>
-              <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
-                <Header />
-                <AppDiagnostics />
-                <HeaderAd />
-                <MobileAd />
-                <main className="pt-[164px] md:pt-[154px]">
-                  <Routes>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/polls" element={<PollsPage />} />
-                   <Route path="/polls/:slug" element={<PollDetailsPage />} />
-                    <Route path="/trivia" element={<TriviaPage />} />
-                    <Route path="/trivia/game/:gameId" element={
-                      <ProtectedRoute>
-                        <TriviaGamePage />
-                      </ProtectedRoute>
-                    } />
-                    <Route path="/leaderboard" element={<LeaderboardPage />} />
-                    <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-                    <Route path="/terms-of-service" element={<TermsOfServicePage />} />
-                    <Route 
-                      path="/admin" 
-                      element={
-                        <ProtectedRoute requiredRole="admin">
-                          <AdminDashboardPage />
-                        </ProtectedRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/dashboard" 
-                      element={
+    <SettingsProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AdProvider>
+            <Router>
+              <ReferralHandler>
+                <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
+                  <Header />
+                  <AppDiagnostics />
+                  <HeaderAd />
+                  <MobileAd />
+                  <main className="pt-[164px] md:pt-[154px]">
+                    <Routes>
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/polls" element={<PollsPage />} />
+                     <Route path="/polls/:slug" element={<PollDetailsPage />} />
+                      <Route path="/trivia" element={<TriviaPage />} />
+                      <Route path="/trivia/game/:gameId" element={
                         <ProtectedRoute>
-                          <DashboardPage />
+                          <TriviaGamePage />
                         </ProtectedRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/rewards" 
-                      element={
-                        <ProtectedRoute>
-                          <RewardsPage />
-                        </ProtectedRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/ambassador" 
-                      element={
-                        <ProtectedRoute requiredRole="ambassador">
-                          <AmbassadorPage />
-                        </ProtectedRoute>
-                      } 
-                    />
-                  </Routes>
-                </main>
-                <Footer />
-                <CookieConsentBanner />
-              </div>
-            </ReferralHandler>
-            <Toaster />
-          </Router>
-        </AdProvider>
-      </AuthProvider>
-    </ThemeProvider>
+                      } />
+                      <Route path="/leaderboard" element={<LeaderboardPage />} />
+                      <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+                      <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+                      <Route 
+                        path="/admin" 
+                        element={
+                          <ProtectedRoute requiredRole="admin">
+                            <AdminDashboardPage />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/dashboard" 
+                        element={
+                          <ProtectedRoute>
+                            <DashboardPage />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/rewards" 
+                        element={
+                          <ProtectedRoute>
+                            <RewardsPage />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/ambassador" 
+                        element={
+                          <ProtectedRoute requiredRole="ambassador">
+                            <AmbassadorPage />
+                          </ProtectedRoute>
+                        } 
+                      />
+                    </Routes>
+                  </main>
+                  <Footer />
+                  <CookieConsentBanner />
+                </div>
+              </ReferralHandler>
+              <Toaster />
+            </Router>
+          </AdProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </SettingsProvider>
   );
 }
 
