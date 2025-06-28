@@ -29,6 +29,9 @@ export interface ProfileUpdateRequest {
   name?: string;
   country?: string;
   avatar_url?: string;
+  payout_method?: string;
+  paypal_email?: string;
+  bank_details?: Record<string, any>;
 }
 
 export interface PointsUpdateRequest {
@@ -162,6 +165,7 @@ export interface TriviaGameSummary {
   totalPlayers: number;
   pointsReward: number;
   estimatedTime: string;
+  is_active?: boolean;
 }
 
 export interface TriviaGameSession {
@@ -310,6 +314,7 @@ export interface AmbassadorDetails {
   is_active: boolean;
   total_referrals: number;
   total_earnings: number;
+  total_payouts: number;
   created_at: string;
   updated_at: string;
 }
@@ -343,17 +348,7 @@ export interface AmbassadorStats {
   tierName?: string;
   nextTierName?: string;
   referralsToNextTier?: number;
-}
-
-export interface CommissionTier {
-  id: string;
-  name: string;
-  min_referrals: number;
-  global_rate: number;
-  country_rates: Record<string, number>;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  payableBalance?: number;
 }
 
 // Poll Comments Types
@@ -449,4 +444,71 @@ export interface RewardStoreItem {
   stock_quantity?: number;
   created_at: string;
   updated_at: string;
+}
+
+// Commission Tier Types
+export interface CommissionTier {
+  id: string;
+  name: string;
+  min_referrals: number;
+  global_rate: number;
+  country_rates: Record<string, number>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Payout System Types
+export interface PayoutMethod {
+  id: string;
+  name: string;
+  description?: string;
+  is_automatic: boolean;
+  is_active: boolean;
+  config: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayoutRequest {
+  id: string;
+  user_id: string;
+  amount: number;
+  payout_method: string;
+  payout_details: Record<string, any>;
+  status: 'pending' | 'approved' | 'rejected' | 'processed';
+  requested_at: string;
+  processed_at?: string;
+  processed_by?: string;
+  admin_notes?: string;
+  transaction_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayoutRequestCreateRequest {
+  amount: number;
+  payout_method: string;
+  payout_details?: Record<string, any>;
+}
+
+export interface PayoutRequestUpdateRequest {
+  status: 'approved' | 'rejected' | 'processed';
+  admin_notes?: string;
+  transaction_id?: string;
+}
+
+export interface PayoutMethodCreateRequest {
+  name: string;
+  description?: string;
+  is_automatic: boolean;
+  config: Record<string, any>;
+}
+
+export interface PayoutMethodUpdateRequest {
+  name?: string;
+  description?: string;
+  is_automatic?: boolean;
+  is_active?: boolean;
+  config?: Record<string, any>;
 }
