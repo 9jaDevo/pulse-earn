@@ -38,7 +38,7 @@ export class ReferralService {
   static async getReferralStats(userId: string): Promise<ServiceResponse<ReferralStats>> {
     try {
       const { data, error } = await supabase
-        .rpc('get_referral_stats', { user_id: userId });
+        .rpc('get_referral_stats', { p_user_id: userId });
 
       if (error) {
         return { data: null, error: error.message };
