@@ -267,8 +267,29 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         
         // Don't close modal yet - user needs to complete Stripe payment
         setLoading(false);
+      } else if (selectedMethod.type === 'paystack') {
+        // Initialize Paystack payment
+        const { data: paystackData, error: paystackError } = await PaymentService.initializePaystackPayment(
+          user.id,
+          formData.budget,
+          promotedPoll.id
+        );
+        
+        if (paystackError) {
+          throw new Error(paystackError);
+        }
+        
+        if (!paystackData || !paystackData.authorizationUrl) {
+          throw new Error('Failed to initialize Paystack payment');
+        }
+        
+        // Redirect to Paystack payment page
+        window.location.href = paystackData.authorizationUrl;
+        
+        // Don't close modal or show success message yet - user needs to complete Paystack payment
+        setLoading(false);
       } else {
-        // For other payment methods (PayPal, Paystack)
+        // For other payment methods (PayPal)
         // This would be implemented similarly to Stripe
         successToast('Your poll promotion has been created and is pending payment and approval.');
         onSuccess();
