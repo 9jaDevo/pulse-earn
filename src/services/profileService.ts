@@ -27,11 +27,11 @@ export class ProfileService {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .limit(1);
+        .maybeSingle();
 
       console.log('[ProfileService] Profile fetch result:', { 
         success: !error, 
-        hasData: !!data && data.length > 0, 
+        hasData: !!data, 
         errorCode: error?.code,
         errorMessage: error?.message
       });
@@ -40,9 +40,8 @@ export class ProfileService {
         return { data: null, error: error.message };
       }
 
-      // Return the first profile if found, otherwise null
-      const profile = data && data.length > 0 ? data[0] : null;
-      return { data: profile, error: null };
+      // maybeSingle() returns the profile object or null if not found
+      return { data, error: null };
     } catch (error) {
       console.error('[ProfileService] Exception in fetchProfileById:', error);
       return { data: null, error: error instanceof Error ? error.message : 'Unknown error occurred' };
@@ -97,11 +96,11 @@ export class ProfileService {
         })
         .eq('id', userId)
         .select()
-        .limit(1);
+        .maybeSingle();
 
       console.log('[ProfileService] Profile update result:', { 
         success: !error, 
-        hasData: !!data && data.length > 0,
+        hasData: !!data,
         errorMessage: error?.message
       });
 
@@ -109,9 +108,8 @@ export class ProfileService {
         return { data: null, error: error.message };
       }
 
-      // Return the first profile if found, otherwise null
-      const profile = data && data.length > 0 ? data[0] : null;
-      return { data: profile, error: null };
+      // maybeSingle() returns the profile object or null if not found
+      return { data, error: null };
     } catch (error) {
       return { 
         data: null, 
@@ -136,7 +134,7 @@ export class ProfileService {
         .from('profiles')
         .select('role')
         .eq('id', adminId)
-        .limit(1);
+        .maybeSingle();
 
       if (adminError) {
         return { 
@@ -145,8 +143,7 @@ export class ProfileService {
         };
       }
 
-      const adminProfile = adminData && adminData.length > 0 ? adminData[0] : null;
-      if (!adminProfile || adminProfile.role !== 'admin') {
+      if (!adminData || adminData.role !== 'admin') {
         return { 
           data: null, 
           error: 'Unauthorized: Only admins can perform this action' 
@@ -301,21 +298,20 @@ export class ProfileService {
         .from('profiles')
         .select('points')
         .eq('id', userId)
-        .limit(1);
+        .maybeSingle();
 
-      console.log('[ProfileService] Current profile fetch result:', { success: !fetchError, points: currentData && currentData.length > 0 ? currentData[0].points : null });
+      console.log('[ProfileService] Current profile fetch result:', { success: !fetchError, points: currentData?.points });
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
       // If no profile found, return error
-      const currentProfile = currentData && currentData.length > 0 ? currentData[0] : null;
-      if (!currentProfile) {
+      if (!currentData) {
         console.log('[ProfileService] No profile found for user, returning error');
         return { data: null, error: 'User profile not found' };
       }
 
-      const newPoints = (currentProfile?.points || 0) + pointsToAdd;
+      const newPoints = (currentData.points || 0) + pointsToAdd;
 
       const { data, error } = await supabase
         .from('profiles')
@@ -325,20 +321,18 @@ export class ProfileService {
         })
         .eq('id', userId)
         .select()
-        .limit(1);
+        .maybeSingle();
 
       console.log('[ProfileService] Points update result:', { 
         success: !error, 
-        newPoints: data && data.length > 0 ? data[0].points : null
+        newPoints: data?.points
       });
 
       if (error) {
         return { data: null, error: error.message };
       }
 
-      // Return the first profile if found, otherwise null
-      const profile = data && data.length > 0 ? data[0] : null;
-      return { data: profile, error: null };
+      return { data, error: null };
     } catch (error) {
       return { 
         data: null, 
@@ -361,15 +355,14 @@ export class ProfileService {
         .from('profiles')
         .select('badges')
         .eq('id', userId)
-        .limit(1);
+        .maybeSingle();
 
-      console.log('[ProfileService] Current profile badges fetch result:', { success: !fetchError, badges: currentData && currentData.length > 0 ? currentData[0].badges : null });
+      console.log('[ProfileService] Current profile badges fetch result:', { success: !fetchError, badges: currentData?.badges });
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
-      const currentProfile = currentData && currentData.length > 0 ? currentData[0] : null;
-      const currentBadges = currentProfile?.badges || [];
+      const currentBadges = currentData?.badges || [];
       
       // Don't add duplicate badges
       if (currentBadges.includes(badge)) {
@@ -387,20 +380,18 @@ export class ProfileService {
         })
         .eq('id', userId)
         .select()
-        .limit(1);
+        .maybeSingle();
 
       console.log('[ProfileService] Badge add result:', { 
         success: !error, 
-        newBadges: data && data.length > 0 ? data[0].badges : null
+        newBadges: data?.badges
       });
 
       if (error) {
         return { data: null, error: error.message };
       }
 
-      // Return the first profile if found, otherwise null
-      const profile = data && data.length > 0 ? data[0] : null;
-      return { data: profile, error: null };
+      return { data, error: null };
     } catch (error) {
       return { 
         data: null, 
@@ -453,16 +444,15 @@ export class ProfileService {
         .from('profiles')
         .select('points')
         .eq('id', userId)
-        .limit(1);
+        .maybeSingle();
 
-      console.log('[ProfileService] User points fetch result:', { success: !userError, points: userData && userData.length > 0 ? userData[0].points : null });
+      console.log('[ProfileService] User points fetch result:', { success: !userError, points: userData?.points });
       if (userError) {
         return { data: null, error: userError.message };
       }
 
       // If no profile found, return rank 0
-      const userProfile = userData && userData.length > 0 ? userData[0] : null;
-      if (!userProfile) {
+      if (!userData) {
         console.log('[ProfileService] No profile found for user, returning rank 0');
         return { data: 0, error: null };
       }
@@ -471,7 +461,7 @@ export class ProfileService {
       const { count, error: countError } = await supabase
         .from('profiles')
         .select('id', { count: 'exact', head: true })
-        .gt('points', userProfile.points);
+        .gt('points', userData.points);
 
       console.log('[ProfileService] Rank calculation result:', { success: !countError, usersWithMorePoints: count });
       if (countError) {
