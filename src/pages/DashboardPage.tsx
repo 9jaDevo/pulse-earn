@@ -12,7 +12,8 @@ import {
   Clock,
   Target,
   Award,
-  DollarSign
+  DollarSign,
+  Tv
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRewards } from '../hooks/useRewards';
