@@ -541,3 +541,108 @@ export interface MarketingMaterialUpdateRequest {
   material_type?: string;
   is_active?: boolean;
 }
+
+// Promoted Polls Types
+export interface Sponsor {
+  id: string;
+  user_id: string;
+  name: string;
+  contact_email: string;
+  website_url?: string;
+  description?: string;
+  is_verified: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SponsorCreateRequest {
+  name: string;
+  contact_email: string;
+  website_url?: string;
+  description?: string;
+}
+
+export interface SponsorUpdateRequest {
+  name?: string;
+  contact_email?: string;
+  website_url?: string;
+  description?: string;
+  is_verified?: boolean;
+  is_active?: boolean;
+}
+
+export interface PromotedPoll {
+  id: string;
+  poll_id: string;
+  sponsor_id: string;
+  pricing_model: 'CPV'; // Cost Per Vote
+  budget_amount: number;
+  cost_per_vote: number;
+  target_votes: number;
+  current_votes: number;
+  status: 'pending_approval' | 'active' | 'paused' | 'completed' | 'rejected';
+  payment_status: 'pending' | 'paid' | 'failed' | 'refunded';
+  start_date?: string;
+  end_date?: string;
+  created_at: string;
+  updated_at: string;
+  approved_by?: string;
+  approved_at?: string;
+  admin_notes?: string;
+  poll?: Poll;
+  sponsor?: Sponsor;
+}
+
+export interface PromotedPollCreateRequest {
+  poll_id: string;
+  sponsor_id: string;
+  budget_amount: number;
+  target_votes: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface PromotedPollUpdateRequest {
+  status?: 'pending_approval' | 'active' | 'paused' | 'completed' | 'rejected';
+  payment_status?: 'pending' | 'paid' | 'failed' | 'refunded';
+  budget_amount?: number;
+  target_votes?: number;
+  start_date?: string;
+  end_date?: string;
+  admin_notes?: string;
+}
+
+export interface Transaction {
+  id: string;
+  user_id: string;
+  promoted_poll_id?: string;
+  amount: number;
+  currency: string;
+  payment_method: 'wallet' | 'stripe' | 'paypal' | 'paystack';
+  payment_method_id?: string;
+  gateway_transaction_id?: string;
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  metadata?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TransactionCreateRequest {
+  promoted_poll_id?: string;
+  amount: number;
+  currency?: string;
+  payment_method: 'wallet' | 'stripe' | 'paypal' | 'paystack';
+  metadata?: Record<string, any>;
+}
+
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  description?: string;
+  type: 'wallet' | 'stripe' | 'paypal' | 'paystack';
+  is_active: boolean;
+  config?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
