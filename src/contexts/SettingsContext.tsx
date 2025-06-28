@@ -12,6 +12,7 @@ interface GeneralSettings {
   faviconUrl: string;
   seoKeywords: string;
   ogImageUrl: string;
+  marketingEnabled: boolean;
 }
 
 interface SettingsContextType {
@@ -31,7 +32,8 @@ const defaultGeneralSettings: GeneralSettings = {
   logoUrl: '/assets/logo.png',
   faviconUrl: '/assets/favicon.ico',
   seoKeywords: 'polls, trivia, rewards, community, earning, games',
-  ogImageUrl: ''
+  ogImageUrl: '',
+  marketingEnabled: true
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -55,21 +57,29 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setError(null);
     
     try {
-      const { data, error: fetchError } = await SettingsService.getSettings('general');
+      // Fetch general settings
+      const { data: generalData, error: generalError } = await SettingsService.getSettings('general');
       
-      if (fetchError) {
-        setError(fetchError);
-        errorToast(`Failed to load settings: ${fetchError}`);
+      if (generalError) {
+        setError(generalError);
+        errorToast(`Failed to load general settings: ${generalError}`);
         return;
       }
       
-      if (data) {
-        // Merge default settings with fetched settings
-        setGeneralSettings({
-          ...defaultGeneralSettings,
-          ...data
-        });
+      // Fetch marketing settings
+      const { data: marketingData, error: marketingError } = await SettingsService.getSettings('marketing');
+      
+      if (marketingError) {
+        console.warn('Failed to load marketing settings:', marketingError);
+        // Continue with default marketing settings
       }
+      
+      // Merge all settings
+      setGeneralSettings({
+        ...defaultGeneralSettings,
+        ...(generalData || {}),
+        marketingEnabled: marketingData?.is_enabled !== undefined ? marketingData.is_enabled : true
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load settings';
       setError(errorMessage);

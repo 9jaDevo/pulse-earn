@@ -9,11 +9,12 @@ import {
   LogOut,
   Zap,
   Gift,
-  DollarSign
+  DollarSign,
+  FileImage
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-type AdminSection = 'overview' | 'users' | 'content' | 'analytics' | 'moderation' | 'settings' | 'rewards' | 'payouts';
+type AdminSection = 'overview' | 'users' | 'content' | 'analytics' | 'moderation' | 'settings' | 'rewards' | 'payouts' | 'marketing';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
@@ -68,6 +69,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       label: 'Payout Management',
       icon: DollarSign,
       description: 'Manage ambassador payouts'
+    },
+    {
+      id: 'marketing' as AdminSection,
+      label: 'Marketing Materials',
+      icon: FileImage,
+      description: 'Manage marketing assets'
     },
     {
       id: 'settings' as AdminSection,

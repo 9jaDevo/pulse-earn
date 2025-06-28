@@ -12,7 +12,8 @@ import {
   RefreshCw,
   Zap,
   Award,
-  DollarSign
+  DollarSign,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SettingsService } from '../../services/settingsService';
@@ -22,7 +23,7 @@ import { AmbassadorCommissionSettings } from './AmbassadorCommissionSettings';
 export const SystemSettings: React.FC = () => {
   const { user } = useAuth();
   const { successToast, errorToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'general' | 'security' | 'notifications' | 'integrations' | 'points' | 'commissions'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'security' | 'notifications' | 'integrations' | 'points' | 'commissions' | 'marketing'>('general');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<Record<string, Record<string, any>>>({
@@ -30,7 +31,8 @@ export const SystemSettings: React.FC = () => {
     security: {},
     notifications: {},
     integrations: {},
-    points: {}
+    points: {},
+    marketing: {}
   });
 
   useEffect(() => {
@@ -50,7 +52,8 @@ export const SystemSettings: React.FC = () => {
           security: data.security || {},
           notifications: data.notifications || {},
           integrations: data.integrations || {},
-          points: data.points || {}
+          points: data.points || {},
+          marketing: data.marketing || {}
         });
       }
     } catch (err) {
@@ -800,6 +803,179 @@ export const SystemSettings: React.FC = () => {
   const renderCommissions = () => (
     <AmbassadorCommissionSettings />
   );
+  
+  const renderMarketing = () => (
+    <div className="space-y-6">
+      <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+        <FileText className="h-6 w-6 mr-3 text-primary-600" />
+        Marketing Module Settings
+      </h2>
+      
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Module Configuration</h3>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-gray-900">Enable Marketing Module</p>
+              <p className="text-sm text-gray-500">Allow ambassadors to access marketing materials</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                className="sr-only peer" 
+                checked={settings.marketing?.is_enabled !== false}
+                onChange={(e) => updateSetting('marketing', 'is_enabled', e.target.checked)}
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+            </label>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Maximum File Size (MB)
+            </label>
+            <input
+              type="number"
+              value={settings.marketing?.max_file_size_mb || 10}
+              onChange={(e) => updateSetting('marketing', 'max_file_size_mb', parseInt(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              min="1"
+              max="50"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Maximum file size for uploaded marketing materials (in megabytes)
+            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Allowed File Types
+            </label>
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="allow_image_jpeg"
+                  checked={(settings.marketing?.allowed_file_types || []).includes('image/jpeg')}
+                  onChange={(e) => {
+                    const currentTypes = settings.marketing?.allowed_file_types || [];
+                    if (e.target.checked) {
+                      updateSetting('marketing', 'allowed_file_types', [...currentTypes, 'image/jpeg']);
+                    } else {
+                      updateSetting('marketing', 'allowed_file_types', currentTypes.filter(t => t !== 'image/jpeg'));
+                    }
+                  }}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label htmlFor="allow_image_jpeg" className="ml-2 block text-sm text-gray-900">
+                  JPEG Images
+                </label>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="allow_image_png"
+                  checked={(settings.marketing?.allowed_file_types || []).includes('image/png')}
+                  onChange={(e) => {
+                    const currentTypes = settings.marketing?.allowed_file_types || [];
+                    if (e.target.checked) {
+                      updateSetting('marketing', 'allowed_file_types', [...currentTypes, 'image/png']);
+                    } else {
+                      updateSetting('marketing', 'allowed_file_types', currentTypes.filter(t => t !== 'image/png'));
+                    }
+                  }}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label htmlFor="allow_image_png" className="ml-2 block text-sm text-gray-900">
+                  PNG Images
+                </label>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="allow_image_gif"
+                  checked={(settings.marketing?.allowed_file_types || []).includes('image/gif')}
+                  onChange={(e) => {
+                    const currentTypes = settings.marketing?.allowed_file_types || [];
+                    if (e.target.checked) {
+                      updateSetting('marketing', 'allowed_file_types', [...currentTypes, 'image/gif']);
+                    } else {
+                      updateSetting('marketing', 'allowed_file_types', currentTypes.filter(t => t !== 'image/gif'));
+                    }
+                  }}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label htmlFor="allow_image_gif" className="ml-2 block text-sm text-gray-900">
+                  GIF Images
+                </label>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="allow_application_pdf"
+                  checked={(settings.marketing?.allowed_file_types || []).includes('application/pdf')}
+                  onChange={(e) => {
+                    const currentTypes = settings.marketing?.allowed_file_types || [];
+                    if (e.target.checked) {
+                      updateSetting('marketing', 'allowed_file_types', [...currentTypes, 'application/pdf']);
+                    } else {
+                      updateSetting('marketing', 'allowed_file_types', currentTypes.filter(t => t !== 'application/pdf'));
+                    }
+                  }}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label htmlFor="allow_application_pdf" className="ml-2 block text-sm text-gray-900">
+                  PDF Documents
+                </label>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="allow_video_mp4"
+                  checked={(settings.marketing?.allowed_file_types || []).includes('video/mp4')}
+                  onChange={(e) => {
+                    const currentTypes = settings.marketing?.allowed_file_types || [];
+                    if (e.target.checked) {
+                      updateSetting('marketing', 'allowed_file_types', [...currentTypes, 'video/mp4']);
+                    } else {
+                      updateSetting('marketing', 'allowed_file_types', currentTypes.filter(t => t !== 'video/mp4'));
+                    }
+                  }}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label htmlFor="allow_video_mp4" className="ml-2 block text-sm text-gray-900">
+                  MP4 Videos
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Default Material Types
+            </label>
+            <textarea
+              value={(settings.marketing?.default_material_types || []).join(', ')}
+              onChange={(e) => {
+                const types = e.target.value.split(',').map(t => t.trim()).filter(Boolean);
+                updateSetting('marketing', 'default_material_types', types);
+              }}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="banner, social_template, flyer, video, presentation"
+              rows={2}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Comma-separated list of material types available for selection
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -840,6 +1016,7 @@ export const SystemSettings: React.FC = () => {
                 { key: 'general', label: 'General', icon: Settings },
                 { key: 'points', label: 'Points & Rewards', icon: Zap },
                 { key: 'commissions', label: 'Ambassador Commissions', icon: DollarSign },
+                { key: 'marketing', label: 'Marketing Materials', icon: FileText },
                 { key: 'security', label: 'Security', icon: Shield },
                 { key: 'notifications', label: 'Notifications', icon: Bell },
                 { key: 'integrations', label: 'Integrations', icon: Globe }
@@ -864,6 +1041,7 @@ export const SystemSettings: React.FC = () => {
           {activeTab === 'general' && renderGeneral()}
           {activeTab === 'points' && renderPoints()}
           {activeTab === 'commissions' && renderCommissions()}
+          {activeTab === 'marketing' && renderMarketing()}
           {activeTab === 'security' && renderSecurity()}
           {activeTab === 'notifications' && renderNotifications()}
           {activeTab === 'integrations' && renderIntegrations()}

@@ -512,3 +512,32 @@ export interface PayoutMethodUpdateRequest {
   is_active?: boolean;
   config?: Record<string, any>;
 }
+
+// Marketing Materials Types
+export interface MarketingMaterial {
+  id: string;
+  name: string;
+  description?: string;
+  file_url: string;
+  file_path: string;
+  file_type: string;
+  material_type: string;
+  created_by: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MarketingMaterialCreateRequest {
+  name: string;
+  description?: string;
+  material_type: string;
+  file_type: string;
+}
+
+export interface MarketingMaterialUpdateRequest {
+  name?: string;
+  description?: string;
+  material_type?: string;
+  is_active?: boolean;
+}
