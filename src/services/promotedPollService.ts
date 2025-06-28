@@ -225,7 +225,7 @@ export class PromotedPollService {
       }
       
       // Check if poll exists and is active
-      const { data: poll, error: pollError } = await PollService.fetchPollBySlug(promotedPollData.poll_id);
+      const { data: poll, error: pollError } = await PollService.fetchPollById(promotedPollData.poll_id);
       
       if (pollError || !poll) {
         return { data: null, error: 'Poll not found or inactive' };

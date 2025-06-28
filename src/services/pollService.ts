@@ -281,7 +281,71 @@ export class PollService {
   }
 
   /**
-   * Fetch a single poll by ID or slug
+   * Fetch a single poll by ID
+   */
+  static async fetchPollById(
+    pollId: string,
+    userId?: string
+  ): Promise<ServiceResponse<Poll>> {
+    console.log('[PollService] Fetching poll by ID:', pollId, 'for userId:', userId || 'none');
+    try {
+      const { data: poll, error } = await supabase
+        .from('polls')
+        .select('*')
+        .eq('id', pollId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      console.log('[PollService] Poll fetch result:', { 
+        success: !error,
+        found: !!poll
+      });
+
+      if (error) {
+        console.error('[PollService] Database error fetching poll:', error);
+        return { data: null, error: error.message };
+      }
+
+      if (!poll) {
+        console.log('[PollService] Poll not found, returning null data');
+        return { data: null, error: null };
+      }
+
+      // Get user vote if userId provided
+      let userVote: PollVoteRow | undefined;
+      if (userId) {
+        console.log('[PollService] Fetching user vote for poll');
+        const { data: vote } = await supabase
+          .from('poll_votes')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('poll_id', poll.id)
+          .maybeSingle();
+        
+        console.log('[PollService] User vote fetch result:', { hasVote: !!vote });
+        userVote = vote || undefined;
+      }
+
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
+      const transformedPoll = this.transformPollRow(poll, userVote);
+      
+      // Set the reward points from settings
+      transformedPoll.reward = pollVotePoints;
+
+      return { data: transformedPoll, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to fetch poll'
+      };
+    }
+  }
+
+  /**
+   * Fetch a single poll by slug
    */
   static async fetchPollBySlug(
     slug: string,
@@ -1260,6 +1324,7 @@ export const {
   createPollCategory,
   updatePollCategory,
   fetchPolls,
+  fetchPollById,
   fetchPollBySlug,
   createPoll,
   voteOnPoll,
