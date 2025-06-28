@@ -11,7 +11,8 @@ import {
   Star,
   Clock,
   Target,
-  Award
+  Award,
+  DollarSign
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRewards } from '../hooks/useRewards';
@@ -19,14 +20,16 @@ import { useLeaderboard } from '../hooks/useLeaderboard';
 import { useBadges } from '../hooks/useBadges';
 import { useToast } from '../hooks/useToast';
 import { Link } from 'react-router-dom';
+import { SponsorDashboard } from '../components/sponsor';
 
 export const DashboardPage: React.FC = () => {
   const { user, profile } = useAuth();
   const { status, getHistory } = useRewards(user?.id);
-  const { getUserRank } = useLeaderboard();
+  const { getUserRank, loading: leaderboardLoading } = useLeaderboard();
   const { userProgress, getEarnedBadgesCount, getBadgesInProgressCount, getNextBadgeToEarn } = useBadges(user?.id);
   const { errorToast } = useToast();
 
+  const [activeTab, setActiveTab] = useState<'overview' | 'sponsor'>('overview');
   const [stats, setStats] = useState({
     totalPoints: 0,
     currentStreak: 0,
@@ -53,6 +56,7 @@ export const DashboardPage: React.FC = () => {
 
   const [pointsProgress, setPointsProgress] = useState<Array<number>>([0, 0, 0, 0, 0, 0, 0]);
   const [loading, setLoading] = useState(true);
+  const [dataFetchAttempted, setDataFetchAttempted] = useState(false);
 
   // Calculate user level based on points
   const calculateLevel = (points: number) => {
@@ -85,12 +89,13 @@ export const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!user || !profile) {
-        setLoading(false);
+      if (!user || !profile || leaderboardLoading || dataFetchAttempted) {
         return;
       }
 
       setLoading(true);
+      setDataFetchAttempted(true);
+      
       try {
         // Fetch user rank
         const rankResult = await getUserRank(user.id);
@@ -200,7 +205,7 @@ export const DashboardPage: React.FC = () => {
     };
 
     fetchDashboardData();
-  }, [user, profile, status, getUserRank, getHistory, userProgress, errorToast]);
+  }, [user, profile, status, getUserRank, getHistory, userProgress, errorToast, leaderboardLoading, dataFetchAttempted]);
 
   // Add relative time method to Date prototype if it doesn't exist
   if (!Date.prototype.toRelativeTime) {
@@ -241,217 +246,228 @@ export const DashboardPage: React.FC = () => {
           <p className="text-gray-600">Track your progress and manage your PulseEarn journey</p>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Total Points</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalPoints.toLocaleString()}</p>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="h-4 w-4 mr-1 text-success-500" />
-                  <span className="text-sm text-success-600">
-                    {pointsProgress[6].toLocaleString()} today
-                  </span>
-                </div>
-              </div>
-              <div className="bg-gradient-to-r from-accent-500 to-accent-600 p-3 rounded-lg">
-                <Zap className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Current Streak</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.currentStreak} days</p>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="h-4 w-4 mr-1 text-success-500" />
-                  <span className="text-sm text-success-600">
-                    {stats.currentStreak > 0 ? '+1 today' : 'Start today!'}
-                  </span>
-                </div>
-              </div>
-              <div className="bg-gradient-to-r from-success-500 to-success-600 p-3 rounded-lg">
-                <Calendar className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Global Rank</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {stats.globalRank > 0 ? `#${stats.globalRank}` : 'Unranked'}
-                </p>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="h-4 w-4 mr-1 text-gray-400" />
-                  <span className="text-sm text-gray-500">
-                    Keep earning!
-                  </span>
-                </div>
-              </div>
-              <div className="bg-gradient-to-r from-warning-500 to-warning-600 p-3 rounded-lg">
-                <Trophy className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Level</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.level}</p>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="h-4 w-4 mr-1 text-gray-400" />
-                  <span className="text-sm text-gray-500">
-                    {stats.levelProgress}/{stats.levelMax} XP
-                  </span>
-                </div>
-              </div>
-              <div className="bg-gradient-to-r from-primary-500 to-primary-600 p-3 rounded-lg">
-                <Star className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </div>
+        {/* Tabs */}
+        <div className="mb-8 border-b border-gray-200">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors ${
+                activeTab === 'overview'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <TrendingUp className="h-4 w-4" />
+              <span>Overview</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('sponsor')}
+              className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors ${
+                activeTab === 'sponsor'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <DollarSign className="h-4 w-4" />
+              <span>Sponsor</span>
+            </button>
+          </nav>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Recent Activity */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Recent Activity</h2>
-              {recentActivities.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 rounded-lg">
-                  <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No recent activity</h3>
-                  <p className="text-gray-600 mb-6">
-                    Start participating in polls, trivia, and daily rewards to see your activity here!
-                  </p>
+        {/* Stats Cards */}
+        {activeTab === 'overview' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Available Points</p>
+                    <p className="text-3xl font-bold text-gray-900">{stats.totalPoints.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-gradient-to-r from-accent-500 to-accent-600 p-3 rounded-lg">
+                    <Zap className="h-6 w-6 text-white" />
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentActivities.map((activity, index) => (
-                    <div key={index} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-                      <div className="bg-primary-100 p-2 rounded-lg">
-                        <activity.icon className="h-5 w-5 text-primary-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-gray-900 font-medium">{activity.title}</p>
-                        <p className="text-gray-500 text-sm">{activity.time}</p>
-                      </div>
-                      <div className="text-right">
-                        <span className={`font-semibold ${activity.points >= 0 ? 'text-accent-600' : 'text-error-600'}`}>
-                          {activity.points >= 0 ? '+' : ''}{activity.points}
-                        </span>
-                        <p className="text-gray-500 text-xs">points</p>
-                      </div>
-                    </div>
-                  ))}
+              </div>
+              
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Current Streak</p>
+                    <p className="text-3xl font-bold text-gray-900">{stats.currentStreak} days</p>
+                  </div>
+                  <div className="bg-gradient-to-r from-success-500 to-success-600 p-3 rounded-lg">
+                    <Calendar className="h-6 w-6 text-white" />
+                  </div>
                 </div>
-              )}
-            </div>
-
-            {/* Progress Chart */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mt-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Points Progress</h2>
-              <div className="h-64 flex items-end justify-between space-x-2">
-                {pointsProgress.map((height, index) => {
-                  const maxHeight = Math.max(...pointsProgress, 100); // Ensure at least 100 for scale
-                  const percentage = height > 0 ? (height / maxHeight) * 100 : 0;
-                  
-                  return (
-                    <div key={index} className="flex-1 flex flex-col items-center">
-                      <div 
-                        className="w-full bg-gradient-to-t from-primary-500 to-primary-400 rounded-t-md mb-2 transition-all duration-500 hover:from-primary-600 hover:to-primary-500"
-                        style={{ height: `${percentage}%` }}
-                        title={`${height} points`}
-                      ></div>
-                      <span className="text-xs text-gray-500">
-                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][index]}
-                      </span>
-                    </div>
-                  );
-                })}
+              </div>
+              
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Global Rank</p>
+                    <p className="text-3xl font-bold text-gray-900">
+                      {stats.globalRank > 0 ? `#${stats.globalRank}` : 'Unranked'}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-r from-warning-500 to-warning-600 p-3 rounded-lg">
+                    <Trophy className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Level</p>
+                    <p className="text-3xl font-bold text-gray-900">{stats.level}</p>
+                  </div>
+                  <div className="bg-gradient-to-r from-primary-500 to-primary-600 p-3 rounded-lg">
+                    <Star className="h-6 w-6 text-white" />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Achievements */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Achievements</h2>
-              {achievements.length === 0 ? (
-                <div className="text-center py-8">
-                  <Award className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-600">Loading achievements...</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {achievements.slice(0, 5).map((achievement, index) => (
-                    <div key={index} className="p-4 rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-medium text-gray-900">{achievement.name}</h3>
-                        {achievement.completed ? (
-                          <Award className="h-5 w-5 text-success-500" />
-                        ) : (
-                          <Clock className="h-5 w-5 text-gray-400" />
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600 mb-3">{achievement.description}</p>
-                      {!achievement.completed && achievement.progress !== undefined && (
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-gradient-to-r from-primary-500 to-primary-600 h-2 rounded-full transition-all duration-500"
-                            style={{ width: `${achievement.progress}%` }}
-                          ></div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Recent Activity */}
+              <div className="lg:col-span-2">
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6">Recent Activity</h2>
+                  {recentActivities.length === 0 ? (
+                    <div className="text-center py-12 bg-gray-50 rounded-lg">
+                      <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No recent activity</h3>
+                      <p className="text-gray-600 mb-6">
+                        Start participating in polls, trivia, and daily rewards to see your activity here!
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {recentActivities.map((activity, index) => (
+                        <div key={index} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                          <div className="bg-primary-100 p-2 rounded-lg">
+                            <activity.icon className="h-5 w-5 text-primary-600" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-gray-900 font-medium">{activity.title}</p>
+                            <p className="text-gray-500 text-sm">{activity.time}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className={`font-semibold ${activity.points >= 0 ? 'text-accent-600' : 'text-error-600'}`}>
+                              {activity.points >= 0 ? '+' : ''}{activity.points}
+                            </span>
+                            <p className="text-gray-500 text-xs">points</p>
+                          </div>
                         </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-              <div className="mt-4 text-center">
-                <Link
-                  to="/rewards?tab=achievements"
-                  className="text-primary-600 hover:text-primary-700 font-medium"
-                >
-                  View All Achievements
-                </Link>
-              </div>
-            </div>
 
-            {/* Quick Actions */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h2>
-              <div className="space-y-3">
-                <Link
-                  to="/polls"
-                  className="w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white p-3 rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all flex items-center justify-center space-x-2"
-                >
-                  <BarChart3 className="h-5 w-5" />
-                  <span>Vote in Polls</span>
-                </Link>
-                <Link
-                  to="/trivia"
-                  className="w-full bg-gradient-to-r from-secondary-600 to-secondary-700 text-white p-3 rounded-lg hover:from-secondary-700 hover:to-secondary-800 transition-all flex items-center justify-center space-x-2"
-                >
-                  <Brain className="h-5 w-5" />
-                  <span>Play Trivia</span>
-                </Link>
-                <Link
-                  to="/rewards"
-                  className="w-full bg-gradient-to-r from-accent-600 to-accent-700 text-white p-3 rounded-lg hover:from-accent-700 hover:to-accent-800 transition-all flex items-center justify-center space-x-2"
-                >
-                  <Gift className="h-5 w-5" />
-                  <span>Claim Rewards</span>
-                </Link>
+                {/* Progress Chart */}
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mt-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6">Points Progress</h2>
+                  <div className="h-64 flex items-end justify-between space-x-2">
+                    {pointsProgress.map((height, index) => {
+                      const maxHeight = Math.max(...pointsProgress, 100); // Ensure at least 100 for scale
+                      const percentage = height > 0 ? (height / maxHeight) * 100 : 0;
+                      
+                      return (
+                        <div key={index} className="flex-1 flex flex-col items-center">
+                          <div 
+                            className="w-full bg-gradient-to-t from-primary-500 to-primary-400 rounded-t-md mb-2 transition-all duration-500 hover:from-primary-600 hover:to-primary-500"
+                            style={{ height: `${percentage}%` }}
+                            title={`${height} points`}
+                          ></div>
+                          <span className="text-xs text-gray-500">
+                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][index]}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Achievements */}
+              <div className="lg:col-span-1">
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6">Achievements</h2>
+                  {achievements.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Award className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-600">Loading achievements...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {achievements.slice(0, 5).map((achievement, index) => (
+                        <div key={index} className="p-4 rounded-lg border border-gray-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-medium text-gray-900">{achievement.name}</h3>
+                            {achievement.completed ? (
+                              <Award className="h-5 w-5 text-success-500" />
+                            ) : (
+                              <Clock className="h-5 w-5 text-gray-400" />
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 mb-3">{achievement.description}</p>
+                          {!achievement.completed && achievement.progress !== undefined && (
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-gradient-to-r from-primary-500 to-primary-600 h-2 rounded-full transition-all duration-500"
+                                style={{ width: `${achievement.progress}%` }}
+                              ></div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-4 text-center">
+                    <Link
+                      to="/rewards?tab=achievements"
+                      className="text-primary-600 hover:text-primary-700 font-medium"
+                    >
+                      View All Achievements
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h2>
+                  <div className="space-y-3">
+                    <Link
+                      to="/polls"
+                      className="w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white p-3 rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all flex items-center justify-center space-x-2"
+                    >
+                      <BarChart3 className="h-5 w-5" />
+                      <span>Vote in Polls</span>
+                    </Link>
+                    <Link
+                      to="/trivia"
+                      className="w-full bg-gradient-to-r from-secondary-600 to-secondary-700 text-white p-3 rounded-lg hover:from-secondary-700 hover:to-secondary-800 transition-all flex items-center justify-center space-x-2"
+                    >
+                      <Brain className="h-5 w-5" />
+                      <span>Play Trivia</span>
+                    </Link>
+                    <Link
+                      to="/rewards"
+                      className="w-full bg-gradient-to-r from-accent-600 to-accent-700 text-white p-3 rounded-lg hover:from-accent-700 hover:to-accent-800 transition-all flex items-center justify-center space-x-2"
+                    >
+                      <Gift className="h-5 w-5" />
+                      <span>Claim Rewards</span>
+                    </Link>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
+
+        {/* Sponsor Dashboard */}
+        {activeTab === 'sponsor' && <SponsorDashboard />}
       </div>
     </div>
   );
