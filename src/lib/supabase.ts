@@ -5,11 +5,19 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 console.log('[Supabase] Initializing Supabase client with:', {
   hasUrl: !!supabaseUrl,
-  hasAnonKey: !!supabaseAnonKey
+  hasAnonKey: !!supabaseAnonKey,
+  url: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'undefined'
 });
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+}
+
+// Validate URL format
+try {
+  new URL(supabaseUrl);
+} catch (error) {
+  throw new Error(`Invalid Supabase URL format: ${supabaseUrl}`);
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -17,6 +25,41 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true
+  },
+  global: {
+    fetch: (url, options = {}) => {
+      console.log('[Supabase] Making request to:', url);
+      
+      // Add timeout and better error handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      return fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          ...options.headers,
+          'Cache-Control': 'no-cache',
+        }
+      }).then(response => {
+        clearTimeout(timeoutId);
+        console.log('[Supabase] Response status:', response.status);
+        return response;
+      }).catch(error => {
+        clearTimeout(timeoutId);
+        console.error('[Supabase] Fetch error:', error);
+        
+        if (error.name === 'AbortError') {
+          throw new Error('Request timeout - please check your internet connection');
+        }
+        
+        if (error.message === 'Failed to fetch') {
+          throw new Error('Network error - please check your internet connection and try again');
+        }
+        
+        throw error;
+      });
+    }
   }
 });
 
@@ -24,6 +67,25 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 supabase.auth.onAuthStateChange((event, session) => {
   console.log('[Supabase] Auth state change:', event, 'Session:', session ? 'exists' : 'null');
 });
+
+// Test connection on initialization
+const testConnection = async () => {
+  try {
+    console.log('[Supabase] Testing connection...');
+    const { data, error } = await supabase.from('profiles').select('count').limit(1);
+    
+    if (error) {
+      console.error('[Supabase] Connection test failed:', error);
+    } else {
+      console.log('[Supabase] Connection test successful');
+    }
+  } catch (error) {
+    console.error('[Supabase] Connection test error:', error);
+  }
+};
+
+// Test connection after a short delay to allow for initialization
+setTimeout(testConnection, 1000);
 
 export type Database = {
   public: {
