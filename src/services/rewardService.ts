@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { ProfileService } from './profileService';
+import { SettingsService } from './settingsService';
 import type { ServiceResponse } from './profileService';
 import type {
   TriviaQuestion,
@@ -27,6 +28,7 @@ export interface TriviaGameSummary {
   totalPlayers: number;
   pointsReward: number;
   estimatedTime: string;
+  is_active?: boolean;
 }
 
 /**
@@ -221,7 +223,8 @@ export class RewardService {
         averageRating: 4.5 + Math.random() * 0.5, // Simulated rating between 4.5-5.0
         totalPlayers: Math.floor(Math.random() * 2000) + 500, // Simulated player count
         pointsReward: game.points_reward,
-        estimatedTime: `${game.estimated_time_minutes} min`
+        estimatedTime: `${game.estimated_time_minutes} min`,
+        is_active: game.is_active
       }));
 
       // Sort by category, then by difficulty
@@ -373,7 +376,7 @@ export class RewardService {
   }
 
   /**
-   * Get trivia questions for a specific category and difficulty
+   * Get trivia questions with filtering options
    */
   static async getTriviaQuestions(
     options: {
@@ -446,6 +449,11 @@ export class RewardService {
         return { data: null, error: 'Cannot spin today. Already spun or error checking status.' };
       }
 
+      // Get streak settings from app_settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const maxStreakMultiplier = pointsSettings?.maxStreakMultiplier || 2.0; // Default to 2.0 if not set
+      const streakIncrement = pointsSettings?.streakIncrement || 0.1; // Default to 0.1 if not set
+
       // Weighted spin logic
       const random = Math.random() * 100;
       let result: SpinResult;
@@ -466,12 +474,27 @@ export class RewardService {
 
       const today = new Date().toISOString().split('T')[0];
 
+      // Calculate streak multiplier
+      const newStreak = result.success ? (status.spinStreak + 1) : 0;
+      const streakMultiplier = Math.min(1 + (newStreak * streakIncrement), maxStreakMultiplier);
+      
+      // Apply streak multiplier to points
+      const basePoints = result.points;
+      const bonusPoints = result.success ? Math.floor(basePoints * (streakMultiplier - 1)) : 0;
+      const totalPoints = basePoints + bonusPoints;
+      
+      // Update result with new points total
+      if (result.success && bonusPoints > 0) {
+        result.points = totalPoints;
+        result.message = `You won ${basePoints} points + ${bonusPoints} streak bonus!`;
+      }
+
       // Update user daily rewards
       const { error: updateError } = await supabase
         .from('user_daily_rewards')
         .update({
           last_spin_date: today,
-          spin_streak: result.success ? status.spinStreak + 1 : 0,
+          spin_streak: newStreak,
           total_spins: status.totalSpins + 1,
           updated_at: new Date().toISOString()
         })
@@ -496,7 +519,14 @@ export class RewardService {
           user_id: userId,
           reward_type: 'spin',
           points_earned: result.points,
-          reward_data: { result: result.type, message: result.message }
+          reward_data: { 
+            result: result.type, 
+            message: result.message,
+            streak: newStreak,
+            streakMultiplier: streakMultiplier,
+            basePoints: basePoints,
+            bonusPoints: bonusPoints
+          }
         });
 
       return { data: result, error: null };
@@ -587,26 +617,32 @@ export class RewardService {
         return { data: null, error: statusError };
       }
 
+      // Get points settings from app_settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      
       // Calculate points based on difficulty and correctness
       let basePoints = 0;
       if (isCorrect) {
         switch (question.difficulty) {
           case 'easy':
-            basePoints = 10;
+            basePoints = pointsSettings?.triviaEasyPoints || 10; // Default to 10 if not set
             break;
           case 'medium':
-            basePoints = 20;
+            basePoints = pointsSettings?.triviaMediumPoints || 20; // Default to 20 if not set
             break;
           case 'hard':
-            basePoints = 30;
+            basePoints = pointsSettings?.triviaHardPoints || 30; // Default to 30 if not set
             break;
         }
       }
 
-      // Calculate streak bonus (10% per day, max 100%)
+      // Calculate streak bonus using settings
+      const maxStreakMultiplier = pointsSettings?.maxStreakMultiplier || 2.0; // Default to 2.0 if not set
+      const streakIncrement = pointsSettings?.streakIncrement || 0.1; // Default to 0.1 if not set
+      
       const newStreak = isCorrect ? (status?.triviaStreak || 0) + 1 : 0;
-      const streakMultiplier = Math.min(newStreak * 0.1, 1.0);
-      const streakBonus = Math.floor(basePoints * streakMultiplier);
+      const streakMultiplier = Math.min(1 + (newStreak * streakIncrement), maxStreakMultiplier);
+      const streakBonus = Math.floor(basePoints * (streakMultiplier - 1));
       const totalPoints = basePoints + streakBonus;
 
       const today = new Date().toISOString().split('T')[0];
@@ -647,7 +683,9 @@ export class RewardService {
             correct_answer: question.correct_answer,
             is_correct: isCorrect,
             difficulty: question.difficulty,
-            streak_bonus: streakBonus
+            streak_bonus: streakBonus,
+            streak_multiplier: streakMultiplier,
+            base_points: basePoints
           }
         });
 
@@ -679,8 +717,10 @@ export class RewardService {
         return { data: null, error: 'Cannot watch ad today. Already watched or error checking status.' };
       }
 
-      // Fixed reward for watching ads
-      const pointsEarned = 15;
+      // Get ad watch points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const adWatchPoints = pointsSettings?.adWatchPoints || 15; // Default to 15 if not set
+
       const today = new Date().toISOString().split('T')[0];
 
       // Update user daily rewards
@@ -698,7 +738,7 @@ export class RewardService {
       }
 
       // Add points to user profile
-      const { error: pointsError } = await ProfileService.updateUserPoints(userId, pointsEarned);
+      const { error: pointsError } = await ProfileService.updateUserPoints(userId, adWatchPoints);
       if (pointsError) {
         return { data: null, error: pointsError };
       }
@@ -709,14 +749,14 @@ export class RewardService {
         .insert({
           user_id: userId,
           reward_type: 'watch',
-          points_earned: pointsEarned,
+          points_earned: adWatchPoints,
           reward_data: { ad_type: 'rewarded_video' }
         });
 
       const result: AdWatchResult = {
         success: true,
-        pointsEarned,
-        message: `You earned ${pointsEarned} points for watching the ad!`
+        pointsEarned: adWatchPoints,
+        message: `You earned ${adWatchPoints} points for watching the ad!`
       };
 
       return { data: result, error: null };
@@ -773,6 +813,34 @@ export class RewardService {
       return {
         data: null,
         error: error instanceof Error ? error.message : 'Failed to get reward history'
+      };
+    }
+  }
+
+  /**
+   * Reset daily rewards for testing (admin only)
+   */
+  static async resetDailyRewards(userId: string): Promise<ServiceResponse<boolean>> {
+    try {
+      const { error } = await supabase
+        .from('user_daily_rewards')
+        .update({
+          last_spin_date: null,
+          last_trivia_date: null,
+          last_watch_date: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      return { data: true, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to reset daily rewards'
       };
     }
   }

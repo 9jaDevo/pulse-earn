@@ -1,5 +1,6 @@
 import { supabase, Database } from '../lib/supabase';
 import { ProfileService } from './profileService';
+import { SettingsService } from './settingsService';
 import type { ServiceResponse } from './profileService';
 import type { Poll, PollOption, PollVote, PollCreateRequest, PollVoteRequest, PollVoteResult, PollCategory } from '../types/api';
 
@@ -90,7 +91,7 @@ export class PollService {
       userVote: userVote?.vote_option,
       timeLeft: this.calculateTimeLeft(row.start_date, row.active_until),
       category: row.category || 'General',
-      reward: 50 // Base reward for voting
+      reward: 50 // Base reward for voting - will be overridden by settings
     };
   }
 
@@ -255,10 +256,19 @@ export class PollService {
         userVotes = votes || [];
       }
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
       // Transform polls with user vote information
       const transformedPolls = (polls || []).map(poll => {
         const userVote = userVotes.find(vote => vote.poll_id === poll.id);
-        return this.transformPollRow(poll, userVote);
+        const pollObj = this.transformPollRow(poll, userVote);
+        
+        // Set the reward points from settings
+        pollObj.reward = pollVotePoints;
+        
+        return pollObj;
       });
 
       return { data: transformedPolls, error: null };
@@ -316,7 +326,14 @@ export class PollService {
         userVote = vote || undefined;
       }
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
       const transformedPoll = this.transformPollRow(poll, userVote);
+      
+      // Set the reward points from settings
+      transformedPoll.reward = pollVotePoints;
 
       return { data: transformedPoll, error: null };
     } catch (error) {
@@ -383,7 +400,14 @@ export class PollService {
         return { data: null, error: error.message };
       }
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
       const transformedPoll = this.transformPollRow(poll);
+      
+      // Set the reward points from settings
+      transformedPoll.reward = pollVotePoints;
 
       return { data: transformedPoll, error: null };
     } catch (error) {
@@ -474,6 +498,7 @@ export class PollService {
         .from('polls')
         .update({ 
           options: updatedOptions as any,
+          total_votes: poll.total_votes + 1,
           updated_at: new Date().toISOString()
         })
         .eq('id', voteData.poll_id);
@@ -483,10 +508,21 @@ export class PollService {
         return { data: null, error: updateError.message };
       }
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
+      console.log('[PollService] Points from settings:', { pollVotePoints });
+
       // Award points to user
-      const pointsEarned = 50; // Base voting reward
-      await ProfileService.updateUserPoints(userId, pointsEarned);
-      console.log('[PollService] Points awarded to user:', pointsEarned);
+      const { error: pointsError } = await ProfileService.updateUserPoints(userId, pollVotePoints);
+      
+      if (pointsError) {
+        console.error('[PollService] Error awarding points:', pointsError);
+        // Continue even if points update fails
+      } else {
+        console.log('[PollService] Points awarded to user:', pollVotePoints);
+      }
 
       // Fetch updated poll
       const { data: updatedPoll } = await this.fetchPollBySlug(poll.slug, userId);
@@ -494,8 +530,8 @@ export class PollService {
 
       const result: PollVoteResult = {
         success: true,
-        message: `Vote recorded successfully! You earned ${pointsEarned} points.`,
-        pointsEarned,
+        message: `Vote recorded successfully! You earned ${pollVotePoints} points.`,
+        pointsEarned: pollVotePoints,
         poll: updatedPoll || undefined
       };
 
@@ -583,7 +619,14 @@ export class PollService {
         return { data: null, error: updateError.message };
       }
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
       const transformedPoll = this.transformPollRow(updatedPoll);
+      
+      // Set the reward points from settings
+      transformedPoll.reward = pollVotePoints;
 
       return { data: transformedPoll, error: null };
     } catch (error) {
@@ -939,6 +982,10 @@ export class PollService {
       let createdPolls: Poll[] = [];
       let votedPolls: Poll[] = [];
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
       if (includeCreated) {
         const { data: created } = await supabase
           .from('polls')
@@ -949,7 +996,11 @@ export class PollService {
           .limit(limit);
 
         if (created) {
-          createdPolls = created.map(poll => this.transformPollRow(poll));
+          createdPolls = created.map(poll => {
+            const pollObj = this.transformPollRow(poll);
+            pollObj.reward = pollVotePoints;
+            return pollObj;
+          });
         }
       }
 
@@ -963,7 +1014,11 @@ export class PollService {
           return { data: null, error: votesError.message };
         }
 
-        votedPolls = (votes || []).map(v => this.transformPollRow(v.poll));
+        votedPolls = (votes || []).map(v => {
+          const pollObj = this.transformPollRow(v.polls);
+          pollObj.reward = pollVotePoints;
+          return pollObj;
+        });
       }
 
       return {
@@ -1171,10 +1226,19 @@ export class PollService {
         userVotes = votes || [];
       }
       
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+      
       // Transform polls with user vote information
       const transformedPolls = (polls || []).map(poll => {
         const userVote = userVotes.find(vote => vote.poll_id === poll.id);
-        return this.transformPollRow(poll, userVote);
+        const pollObj = this.transformPollRow(poll, userVote);
+        
+        // Set the reward points from settings
+        pollObj.reward = pollVotePoints;
+        
+        return pollObj;
       });
       
       return { 
