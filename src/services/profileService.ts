@@ -27,27 +27,27 @@ export class ProfileService {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .maybeSingle();
+        .limit(1);
 
       console.log('[ProfileService] Profile fetch result:', { 
         success: !error, 
-        hasData: !!data, 
+        hasData: !!data && data.length > 0, 
         errorCode: error?.code,
         errorMessage: error?.message
       });
-
-      // Handle the specific case where no profile exists (PGRST116 error)
-      if (error && error.code === 'PGRST116') {
-        console.log('[ProfileService] No profile found for user (PGRST116), returning null data');
-        return { data: null, error: null };
-      }
 
       if (error) {
         return { data: null, error: error.message };
       }
 
-      // maybeSingle() returns the profile object or null if not found
-      return { data, error: null };
+      // Check if any profile was found
+      if (!data || data.length === 0) {
+        console.log('[ProfileService] No profile found for user, returning null data');
+        return { data: null, error: null };
+      }
+
+      // Return the first (and only) profile
+      return { data: data[0], error: null };
     } catch (error) {
       console.error('[ProfileService] Exception in fetchProfileById:', error);
       return { data: null, error: error instanceof Error ? error.message : 'Unknown error occurred' };
