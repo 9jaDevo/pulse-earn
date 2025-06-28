@@ -353,8 +353,8 @@ export class PaymentService {
   }
   
   /**
-   * Initialize a Stripe payment (placeholder)
-   * In a real implementation, this would create a Stripe payment intent
+   * Initialize a Stripe payment
+   * This creates a transaction record and calls the Stripe API to create a payment intent
    */
   static async initializeStripePayment(
     userId: string,
@@ -365,29 +365,83 @@ export class PaymentService {
     transactionId: string;
   }>> {
     try {
-      // This is a placeholder implementation
-      // In a real implementation, this would call a Supabase Edge Function or external API
-      
       // Create a pending transaction
-      const { data: transaction, error } = await this.createTransaction(userId, {
+      const { data: transaction, error: transactionError } = await this.createTransaction(userId, {
         amount,
         payment_method: 'stripe',
         promoted_poll_id: promotedPollId
       });
       
-      if (error) {
-        return { data: null, error };
+      if (transactionError) {
+        return { data: null, error: transactionError };
       }
       
-      // In a real implementation, this would return a Stripe client secret
-      // For now, we'll return a fake client secret
-      return { 
-        data: {
-          clientSecret: `fake_client_secret_${Date.now()}`,
-          transactionId: transaction.id
-        }, 
-        error: null 
-      };
+      if (!transaction) {
+        return { data: null, error: 'Failed to create transaction record' };
+      }
+      
+      try {
+        // Call the Supabase Edge Function to create a payment intent
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-intent`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            amount,
+            userId,
+            transactionId: transaction.id,
+            promotedPollId: promotedPollId
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create payment intent');
+        }
+        
+        const { clientSecret, paymentIntentId } = await response.json();
+        
+        if (!clientSecret) {
+          throw new Error('No client secret returned from payment intent creation');
+        }
+        
+        // Update transaction with Stripe payment intent ID
+        await supabase
+          .from('transactions')
+          .update({
+            stripe_payment_intent_id: paymentIntentId,
+            metadata: {
+              ...transaction.metadata,
+              payment_intent_id: paymentIntentId
+            }
+          })
+          .eq('id', transaction.id);
+        
+        return { 
+          data: {
+            clientSecret,
+            transactionId: transaction.id
+          }, 
+          error: null 
+        };
+      } catch (err) {
+        // If payment intent creation fails, mark the transaction as failed
+        await supabase
+          .from('transactions')
+          .update({
+            status: 'failed',
+            metadata: {
+              ...transaction.metadata,
+              error: err instanceof Error ? err.message : 'Failed to create payment intent'
+            },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', transaction.id);
+        
+        throw err;
+      }
     } catch (error) {
       return {
         data: null,

@@ -7,3 +7,4 @@
 export { SponsorDashboard } from './SponsorDashboard';
 export { ManageSponsorProfile } from './ManageSponsorProfile';
 export { CreatePromotedPollModal } from './CreatePromotedPollModal';
+export { StripePaymentForm } from './StripePaymentForm';
