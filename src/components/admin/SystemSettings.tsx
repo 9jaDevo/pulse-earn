@@ -12,24 +12,19 @@ import {
   RefreshCw,
   Zap,
   Award,
-  AlertCircle,
-  Image,
-  FileText,
-  Link as LinkIcon
+  DollarSign
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SettingsService } from '../../services/settingsService';
 import { useToast } from '../../hooks/useToast';
-import { useSettings } from '../../contexts/SettingsContext';
+import { AmbassadorCommissionSettings } from './AmbassadorCommissionSettings';
 
 export const SystemSettings: React.FC = () => {
   const { user } = useAuth();
-  const { generalSettings, refreshSettings } = useSettings();
   const { successToast, errorToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'general' | 'security' | 'notifications' | 'integrations' | 'points'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'security' | 'notifications' | 'integrations' | 'points' | 'commissions'>('general');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<Record<string, Record<string, any>>>({
     general: {},
     security: {},
@@ -44,43 +39,32 @@ export const SystemSettings: React.FC = () => {
 
   const fetchSettings = async () => {
     setLoading(true);
-    setError(null);
-    
     try {
-      const { data, error: serviceError } = await SettingsService.getAllSettings();
+      const { data, error } = await SettingsService.getAllSettings();
       
-      if (serviceError) {
-        setError(serviceError);
-        errorToast(`Failed to load settings: ${serviceError}`);
+      if (error) {
+        errorToast(`Failed to load settings: ${error}`);
       } else if (data) {
-        // Initialize any missing categories with empty objects
-        const completeSettings = {
+        setSettings({
           general: data.general || {},
           security: data.security || {},
           notifications: data.notifications || {},
           integrations: data.integrations || {},
           points: data.points || {}
-        };
-        
-        setSettings(completeSettings);
+        });
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred while loading settings';
-      setError(errorMessage);
-      errorToast(errorMessage);
+      errorToast('An error occurred while loading settings');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSave = async () => {
-    if (!user) {
-      errorToast('You must be logged in to update settings');
-      return;
-    }
+    if (!user) return;
     
     setSaving(true);
-    setError(null);
     
     try {
       // Save each category of settings
@@ -94,19 +78,13 @@ export const SystemSettings: React.FC = () => {
       const errors = results.filter(result => result.error);
       
       if (errors.length > 0) {
-        const errorMessage = errors.map(e => e.error).join(', ');
-        setError(`Failed to save some settings: ${errorMessage}`);
-        errorToast(`Failed to save some settings: ${errorMessage}`);
+        errorToast(`Failed to save some settings: ${errors[0].error}`);
       } else {
         successToast('Settings saved successfully');
-        
-        // Refresh settings context to update the UI
-        await refreshSettings();
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred while saving settings';
-      setError(errorMessage);
-      errorToast(errorMessage);
+      errorToast('An error occurred while saving settings');
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -144,9 +122,6 @@ export const SystemSettings: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="PulseEarn"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                The name of your platform (displayed in header, footer, and browser title)
-              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -159,9 +134,6 @@ export const SystemSettings: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="Community-powered platform for polls, trivia, and rewards"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                A brief description of your platform (used in meta tags for SEO)
-              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -197,9 +169,6 @@ export const SystemSettings: React.FC = () => {
                 <option value="dark">Dark</option>
                 <option value="system">System</option>
               </select>
-              <p className="text-xs text-gray-500 mt-1">
-                The default theme for new users
-              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -217,42 +186,24 @@ export const SystemSettings: React.FC = () => {
                   Allow users to change theme
                 </label>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                If disabled, all users will see the default theme
-              </p>
             </div>
           </div>
         </div>
         
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Logo & Favicon</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Branding</h3>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Logo URL
               </label>
-              <div className="flex items-center space-x-3">
-                <input
-                  type="text"
-                  value={settings.general.logoUrl || ''}
-                  onChange={(e) => updateSetting('general', 'logoUrl', e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="/assets/logo.png"
-                />
-                {settings.general.logoUrl && (
-                  <div className="w-10 h-10 border border-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
-                    <img 
-                      src={settings.general.logoUrl} 
-                      alt="Logo preview" 
-                      className="max-w-full max-h-full object-contain"
-                      onError={(e) => {
-                        e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLWltYWdlLW9mZiI+PHBhdGggZD0iTTE4IDEyLjVWMTRhMiAyIDAgMCAxLTIgMkgyYTIgMiAwIDAgMS0yLTJWMTBhMiAyIDAgMCAxIDItMmgzIi8+PHBhdGggZD0iTTE4IDEyLjVWMTBhMiAyIDAgMCAwLTItMmgtMS41Ii8+PHBhdGggZD0iTTIgMjEuNCAyMS40IDIiLz48cGF0aCBkPSJNMjIgMTUuMXYyYTIgMiAwIDAgMS0yIDJoLTEuMSIvPjxwYXRoIGQ9Ik0yMi4zOSAxNS40YTIgMiAwIDAgMC0uMzktMS40bC00LjYtNy45QTIgMiAwIDAgMCAxNS42IDVINi40YTIgMiAwIDAgMC0xLjcuOUw0LjQgNi4yIi8+PHBhdGggZD0iTTIgMTQuOWw1LTIuNSIvPjxwYXRoIGQ9Im03IDEyLjkgMy0xLjUiLz48cGF0aCBkPSJtMTMgMTAuOSA0LTIiLz48cGF0aCBkPSJtMTcgMTUuOSAzLTEuNSIvPjwvc3ZnPg==';
-                        e.currentTarget.style.padding = '5px';
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
+              <input
+                type="text"
+                value={settings.general.logoUrl || ''}
+                onChange={(e) => updateSetting('general', 'logoUrl', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="/assets/logo.png"
+              />
               <p className="text-xs text-gray-500 mt-1">
                 URL to your logo image (recommended size: 200x50px)
               </p>
@@ -261,30 +212,15 @@ export const SystemSettings: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Favicon URL
               </label>
-              <div className="flex items-center space-x-3">
-                <input
-                  type="text"
-                  value={settings.general.faviconUrl || ''}
-                  onChange={(e) => updateSetting('general', 'faviconUrl', e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="/assets/favicon.ico"
-                />
-                {settings.general.faviconUrl && (
-                  <div className="w-10 h-10 border border-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
-                    <img 
-                      src={settings.general.faviconUrl} 
-                      alt="Favicon preview" 
-                      className="max-w-full max-h-full object-contain"
-                      onError={(e) => {
-                        e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLWltYWdlLW9mZiI+PHBhdGggZD0iTTE4IDEyLjVWMTRhMiAyIDAgMCAxLTIgMkgyYTIgMiAwIDAgMS0yLTJWMTBhMiAyIDAgMCAxIDItMmgzIi8+PHBhdGggZD0iTTE4IDEyLjVWMTBhMiAyIDAgMCAwLTItMmgtMS41Ii8+PHBhdGggZD0iTTIgMjEuNCAyMS40IDIiLz48cGF0aCBkPSJNMjIgMTUuMXYyYTIgMiAwIDAgMS0yIDJoLTEuMSIvPjxwYXRoIGQ9Ik0yMi4zOSAxNS40YTIgMiAwIDAgMC0uMzktMS40bC00LjYtNy45QTIgMiAwIDAgMCAxNS42IDVINi40YTIgMiAwIDAgMC0xLjcuOUw0LjQgNi4yIi8+PHBhdGggZD0iTTIgMTQuOWw1LTIuNSIvPjxwYXRoIGQ9Im03IDEyLjkgMy0xLjUiLz48cGF0aCBkPSJtMTMgMTAuOSA0LTIiLz48cGF0aCBkPSJtMTcgMTUuOSAzLTEuNSIvPjwvc3ZnPg==';
-                        e.currentTarget.style.padding = '5px';
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
+              <input
+                type="text"
+                value={settings.general.faviconUrl || ''}
+                onChange={(e) => updateSetting('general', 'faviconUrl', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="/assets/favicon.ico"
+              />
               <p className="text-xs text-gray-500 mt-1">
-                URL to your favicon (recommended format: .ico, 32x32px)
+                URL to your favicon (recommended size: 32x32px)
               </p>
             </div>
           </div>
@@ -297,10 +233,10 @@ export const SystemSettings: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 SEO Keywords
               </label>
-              <textarea
+              <input
+                type="text"
                 value={settings.general.seoKeywords || ''}
                 onChange={(e) => updateSetting('general', 'seoKeywords', e.target.value)}
-                rows={2}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="polls, trivia, rewards, community, earning, games"
               />
@@ -312,30 +248,15 @@ export const SystemSettings: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Open Graph Image URL
               </label>
-              <div className="flex items-center space-x-3">
-                <input
-                  type="text"
-                  value={settings.general.ogImageUrl || ''}
-                  onChange={(e) => updateSetting('general', 'ogImageUrl', e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="https://example.com/og-image.jpg"
-                />
-                {settings.general.ogImageUrl && (
-                  <div className="w-10 h-10 border border-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
-                    <img 
-                      src={settings.general.ogImageUrl} 
-                      alt="OG Image preview" 
-                      className="max-w-full max-h-full object-contain"
-                      onError={(e) => {
-                        e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLWltYWdlLW9mZiI+PHBhdGggZD0iTTE4IDEyLjVWMTRhMiAyIDAgMCAxLTIgMkgyYTIgMiAwIDAgMS0yLTJWMTBhMiAyIDAgMCAxIDItMmgzIi8+PHBhdGggZD0iTTE4IDEyLjVWMTBhMiAyIDAgMCAwLTItMmgtMS41Ii8+PHBhdGggZD0iTTIgMjEuNCAyMS40IDIiLz48cGF0aCBkPSJNMjIgMTUuMXYyYTIgMiAwIDAgMS0yIDJoLTEuMSIvPjxwYXRoIGQ9Ik0yMi4zOSAxNS40YTIgMiAwIDAgMC0uMzktMS40bC00LjYtNy45QTIgMiAwIDAgMCAxNS42IDVINi40YTIgMiAwIDAgMC0xLjcuOUw0LjQgNi4yIi8+PHBhdGggZD0iTTIgMTQuOWw1LTIuNSIvPjxwYXRoIGQ9Im03IDEyLjkgMy0xLjUiLz48cGF0aCBkPSJtMTMgMTAuOSA0LTIiLz48cGF0aCBkPSJtMTcgMTUuOSAzLTEuNSIvPjwvc3ZnPg==';
-                        e.currentTarget.style.padding = '5px';
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
+              <input
+                type="text"
+                value={settings.general.ogImageUrl || ''}
+                onChange={(e) => updateSetting('general', 'ogImageUrl', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="https://example.com/og-image.jpg"
+              />
               <p className="text-xs text-gray-500 mt-1">
-                Image URL for social media sharing (recommended size: 1200x630px)
+                Image displayed when sharing links on social media (recommended size: 1200x630px)
               </p>
             </div>
           </div>
@@ -363,6 +284,7 @@ export const SystemSettings: React.FC = () => {
               value={settings.points.pollVotePoints || 50}
               onChange={(e) => updateSetting('points', 'pollVotePoints', parseInt(e.target.value))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              min="0"
             />
             <p className="text-xs text-gray-500 mt-1">
               Points earned for voting on a poll
@@ -377,9 +299,10 @@ export const SystemSettings: React.FC = () => {
               value={settings.points.triviaEasyPoints || 10}
               onChange={(e) => updateSetting('points', 'triviaEasyPoints', parseInt(e.target.value))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              min="0"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Points earned for correctly answering an easy trivia question
+              Points earned for correct easy trivia answers
             </p>
           </div>
           <div>
@@ -391,9 +314,10 @@ export const SystemSettings: React.FC = () => {
               value={settings.points.triviaMediumPoints || 20}
               onChange={(e) => updateSetting('points', 'triviaMediumPoints', parseInt(e.target.value))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              min="0"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Points earned for correctly answering a medium trivia question
+              Points earned for correct medium trivia answers
             </p>
           </div>
           <div>
@@ -405,9 +329,10 @@ export const SystemSettings: React.FC = () => {
               value={settings.points.triviaHardPoints || 30}
               onChange={(e) => updateSetting('points', 'triviaHardPoints', parseInt(e.target.value))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              min="0"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Points earned for correctly answering a hard trivia question
+              Points earned for correct hard trivia answers
             </p>
           </div>
           <div>
@@ -419,6 +344,7 @@ export const SystemSettings: React.FC = () => {
               value={settings.points.adWatchPoints || 15}
               onChange={(e) => updateSetting('points', 'adWatchPoints', parseInt(e.target.value))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              min="0"
             />
             <p className="text-xs text-gray-500 mt-1">
               Points earned for watching an ad
@@ -433,6 +359,7 @@ export const SystemSettings: React.FC = () => {
               value={settings.points.referralBonusPoints || 100}
               onChange={(e) => updateSetting('points', 'referralBonusPoints', parseInt(e.target.value))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              min="0"
             />
             <p className="text-xs text-gray-500 mt-1">
               Points earned for referring a new user
@@ -529,6 +456,7 @@ export const SystemSettings: React.FC = () => {
                 value={settings.security.sessionTimeoutMinutes || 60}
                 onChange={(e) => updateSetting('security', 'sessionTimeoutMinutes', parseInt(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                min="5"
               />
             </div>
           </div>
@@ -576,6 +504,7 @@ export const SystemSettings: React.FC = () => {
                 value={settings.security.maxReportsBeforeAutoHide || 5}
                 onChange={(e) => updateSetting('security', 'maxReportsBeforeAutoHide', parseInt(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                min="1"
               />
             </div>
           </div>
@@ -717,11 +646,7 @@ export const SystemSettings: React.FC = () => {
                 placeholder="ca-pub-xxxxxxxxxxxxxxxxx"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Your Google AdSense Publisher ID (e.g., ca-pub-1234567890123456)
-              </p>
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Header Ad Slot
@@ -733,11 +658,7 @@ export const SystemSettings: React.FC = () => {
                 placeholder="1234567890"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Ad unit slot ID for the header ad
-              </p>
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Footer Ad Slot
@@ -746,14 +667,10 @@ export const SystemSettings: React.FC = () => {
                 type="text"
                 value={settings.integrations.adsenseFooterSlot || ''}
                 onChange={(e) => updateSetting('integrations', 'adsenseFooterSlot', e.target.value)}
-                placeholder="0987654321"
+                placeholder="1234567890"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Ad unit slot ID for the footer ad
-              </p>
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Sidebar Ad Slot
@@ -762,14 +679,10 @@ export const SystemSettings: React.FC = () => {
                 type="text"
                 value={settings.integrations.adsenseSidebarSlot || ''}
                 onChange={(e) => updateSetting('integrations', 'adsenseSidebarSlot', e.target.value)}
-                placeholder="1122334455"
+                placeholder="1234567890"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Ad unit slot ID for the sidebar ad
-              </p>
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Content Ad Slot
@@ -778,14 +691,10 @@ export const SystemSettings: React.FC = () => {
                 type="text"
                 value={settings.integrations.adsenseContentSlot || ''}
                 onChange={(e) => updateSetting('integrations', 'adsenseContentSlot', e.target.value)}
-                placeholder="5544332211"
+                placeholder="1234567890"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Ad unit slot ID for in-content ads
-              </p>
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Mobile Ad Slot
@@ -794,14 +703,10 @@ export const SystemSettings: React.FC = () => {
                 type="text"
                 value={settings.integrations.adsenseMobileSlot || ''}
                 onChange={(e) => updateSetting('integrations', 'adsenseMobileSlot', e.target.value)}
-                placeholder="9988776655"
+                placeholder="1234567890"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Ad unit slot ID for mobile-specific ads
-              </p>
             </div>
-            
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-gray-900">Enable Ads</p>
@@ -859,7 +764,6 @@ export const SystemSettings: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 SMTP Username
@@ -872,7 +776,6 @@ export const SystemSettings: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 SMTP Password
@@ -885,106 +788,17 @@ export const SystemSettings: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
               <p className="text-xs text-gray-500 mt-1">
-                For Gmail, you may need to use an app password
+                For security, this will be stored encrypted
               </p>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-900">Enable Email Notifications</p>
-                <p className="text-sm text-gray-500">Send email notifications to users</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  className="sr-only peer" 
-                  checked={settings.integrations.emailEnabled !== false}
-                  onChange={(e) => updateSetting('integrations', 'emailEnabled', e.target.checked)}
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-              </label>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Social Media</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Facebook Page URL
-              </label>
-              <div className="flex items-center">
-                <span className="bg-gray-100 px-3 py-2 rounded-l-lg border border-r-0 border-gray-200 text-gray-500">
-                  <LinkIcon className="h-4 w-4" />
-                </span>
-                <input
-                  type="text"
-                  value={settings.integrations.facebookUrl || ''}
-                  onChange={(e) => updateSetting('integrations', 'facebookUrl', e.target.value)}
-                  placeholder="https://facebook.com/yourpage"
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-r-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Twitter/X Profile URL
-              </label>
-              <div className="flex items-center">
-                <span className="bg-gray-100 px-3 py-2 rounded-l-lg border border-r-0 border-gray-200 text-gray-500">
-                  <LinkIcon className="h-4 w-4" />
-                </span>
-                <input
-                  type="text"
-                  value={settings.integrations.twitterUrl || ''}
-                  onChange={(e) => updateSetting('integrations', 'twitterUrl', e.target.value)}
-                  placeholder="https://twitter.com/yourhandle"
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-r-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Instagram Profile URL
-              </label>
-              <div className="flex items-center">
-                <span className="bg-gray-100 px-3 py-2 rounded-l-lg border border-r-0 border-gray-200 text-gray-500">
-                  <LinkIcon className="h-4 w-4" />
-                </span>
-                <input
-                  type="text"
-                  value={settings.integrations.instagramUrl || ''}
-                  onChange={(e) => updateSetting('integrations', 'instagramUrl', e.target.value)}
-                  placeholder="https://instagram.com/yourhandle"
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-r-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                LinkedIn Company URL
-              </label>
-              <div className="flex items-center">
-                <span className="bg-gray-100 px-3 py-2 rounded-l-lg border border-r-0 border-gray-200 text-gray-500">
-                  <LinkIcon className="h-4 w-4" />
-                </span>
-                <input
-                  type="text"
-                  value={settings.integrations.linkedinUrl || ''}
-                  onChange={(e) => updateSetting('integrations', 'linkedinUrl', e.target.value)}
-                  placeholder="https://linkedin.com/company/yourcompany"
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-r-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+  );
+  
+  const renderCommissions = () => (
+    <AmbassadorCommissionSettings />
   );
 
   return (
@@ -997,7 +811,7 @@ export const SystemSettings: React.FC = () => {
         </div>
         <button
           onClick={handleSave}
-          disabled={saving || loading}
+          disabled={saving || loading || activeTab === 'commissions'}
           className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
         >
           {saving ? (
@@ -1008,17 +822,6 @@ export const SystemSettings: React.FC = () => {
           <span>{saving ? 'Saving...' : 'Save Changes'}</span>
         </button>
       </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="bg-error-50 border border-error-200 text-error-700 px-4 py-3 rounded-lg flex items-start">
-          <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium">Error</p>
-            <p>{error}</p>
-          </div>
-        </div>
-      )}
 
       {/* Loading State */}
       {loading && (
@@ -1036,6 +839,7 @@ export const SystemSettings: React.FC = () => {
               {[
                 { key: 'general', label: 'General', icon: Settings },
                 { key: 'points', label: 'Points & Rewards', icon: Zap },
+                { key: 'commissions', label: 'Ambassador Commissions', icon: DollarSign },
                 { key: 'security', label: 'Security', icon: Shield },
                 { key: 'notifications', label: 'Notifications', icon: Bell },
                 { key: 'integrations', label: 'Integrations', icon: Globe }
@@ -1059,6 +863,7 @@ export const SystemSettings: React.FC = () => {
           {/* Content */}
           {activeTab === 'general' && renderGeneral()}
           {activeTab === 'points' && renderPoints()}
+          {activeTab === 'commissions' && renderCommissions()}
           {activeTab === 'security' && renderSecurity()}
           {activeTab === 'notifications' && renderNotifications()}
           {activeTab === 'integrations' && renderIntegrations()}
