@@ -141,6 +141,40 @@ export class PollService {
     }
   }
 
+  /**
+   * Update a poll category
+   */
+  static async updatePollCategory(
+    categoryId: string,
+    updates: {
+      name?: string;
+      description?: string | null;
+      is_active?: boolean;
+    }
+  ): Promise<ServiceResponse<PollCategory>> {
+    try {
+      const { data, error } = await supabase
+        .from('poll_categories')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', categoryId)
+        .select()
+        .single();
+      
+      if (error) {
+        return { data: null, error: error.message };
+      }
+      
+      return { data, error: null };
+    } catch (err) {
+      return { 
+        data: null, 
+        error: err instanceof Error ? err.message : 'Failed to update category' 
+      };
+    }
+  }
   
   /**
    * Fetch polls with optional filtering
@@ -1155,3 +1189,26 @@ export class PollService {
     }
   }
 }
+
+// Export individual functions for backward compatibility and easier testing
+export const {
+  getAllPollCategories,
+  createPollCategory,
+  updatePollCategory,
+  fetchPolls,
+  fetchPollBySlug,
+  createPoll,
+  voteOnPoll,
+  updatePoll,
+  archivePoll,
+  restorePoll,
+  getPollComments,
+  createPollComment,
+  updatePollComment,
+  deletePollComment,
+  reportContent,
+  getUserPollHistory,
+  getPollStats,
+  getDistinctPollCategories,
+  searchPolls
+} = PollService;

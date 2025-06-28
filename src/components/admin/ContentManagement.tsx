@@ -13,7 +13,8 @@ import {
   Tag,
   Award,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  AlertCircle
 } from 'lucide-react';
 import { PollService } from '../../services/pollService';
 import { RewardService } from '../../services/rewardService';
@@ -26,6 +27,8 @@ import { AddEditTriviaGameModal } from './AddEditTriviaGameModal';
 import { AddEditTriviaQuestionModal } from './AddEditTriviaQuestionModal';
 import { AddEditBadgeModal } from './AddEditBadgeModal';
 import { CreatePollModal } from '../polls/CreatePollModal';
+import { AddEditCategoryModal } from './AddEditCategoryModal';
+import { Pagination } from '../ui/Pagination';
 
 export const ContentManagement: React.FC = () => {
   const { user } = useAuth();
@@ -36,6 +39,13 @@ export const ContentManagement: React.FC = () => {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCategory, setNewCategory] = useState({ name: '', description: '' });
   const { successToast, errorToast } = useToast();
+  
+  // Category state
+  const [selectedCategory, setSelectedCategory] = useState<PollCategory | null>(null);
+  const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
+  const [categoriesPage, setCategoriesPage] = useState(1);
+  const [totalCategories, setTotalCategories] = useState(0);
+  const [categoriesPerPage] = useState(10);
 
   // Poll state
   const [polls, setPolls] = useState<any[]>([]);
@@ -63,11 +73,6 @@ export const ContentManagement: React.FC = () => {
   const [badgesPage, setBadgesPage] = useState(1);
   const [totalBadges, setTotalBadges] = useState(0);
   const [badgesPerPage] = useState(10);
-
-  // Category state
-  const [categoriesPage, setCategoriesPage] = useState(1);
-  const [totalCategories, setTotalCategories] = useState(0);
-  const [categoriesPerPage] = useState(10);
 
   useEffect(() => {
     if (activeTab === 'polls') {
@@ -252,20 +257,20 @@ export const ContentManagement: React.FC = () => {
     }
   };
 
-  const handleEditCategory = async (category: PollCategory) => {
-    // Implement category editing
-    console.log('Edit category:', category);
+  const handleEditCategory = (category: PollCategory) => {
+    setSelectedCategory(category);
+    setShowEditCategoryModal(true);
   };
 
   const handleToggleCategoryStatus = async (category: PollCategory) => {
     try {
-      const { error } = await supabase
-        .from('poll_categories')
-        .update({ is_active: !category.is_active })
-        .eq('id', category.id);
+      const { error } = await PollService.updatePollCategory(
+        category.id,
+        { is_active: !category.is_active }
+      );
       
       if (error) {
-        errorToast(`Failed to update category: ${error.message}`);
+        errorToast(`Failed to update category: ${error}`);
         return;
       }
       
@@ -494,43 +499,6 @@ export const ContentManagement: React.FC = () => {
     }
   };
 
-  const renderPagination = (
-    currentPage: number, 
-    totalItems: number, 
-    itemsPerPage: number,
-    setPage: (page: number) => void
-  ) => {
-    const totalPages = Math.ceil(totalItems / itemsPerPage);
-    
-    if (totalPages <= 1) return null;
-    
-    return (
-      <div className="flex justify-center mt-6">
-        <nav className="flex items-center space-x-2">
-          <button
-            onClick={() => setPage(Math.max(1, currentPage - 1))}
-            disabled={currentPage === 1}
-            className="p-2 rounded-md border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          
-          <div className="text-sm">
-            Page {currentPage} of {totalPages}
-          </div>
-          
-          <button
-            onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
-            disabled={currentPage === totalPages}
-            className="p-2 rounded-md border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </nav>
-      </div>
-    );
-  };
-
   const renderCategories = () => (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -644,7 +612,12 @@ export const ContentManagement: React.FC = () => {
         </div>
       )}
       
-      {renderPagination(categoriesPage, totalCategories, categoriesPerPage, setCategoriesPage)}
+      <Pagination
+        currentPage={categoriesPage}
+        totalItems={totalCategories}
+        itemsPerPage={categoriesPerPage}
+        onPageChange={setCategoriesPage}
+      />
     </div>
   );
 
@@ -764,7 +737,12 @@ export const ContentManagement: React.FC = () => {
         </div>
       )}
       
-      {renderPagination(pollsPage, totalPolls, pollsPerPage, setPollsPage)}
+      <Pagination
+        currentPage={pollsPage}
+        totalItems={totalPolls}
+        itemsPerPage={pollsPerPage}
+        onPageChange={setPollsPage}
+      />
     </div>
   );
 
@@ -1025,7 +1003,12 @@ export const ContentManagement: React.FC = () => {
         </div>
       )}
       
-      {renderPagination(triviaPage, totalTriviaGames, triviaPerPage, setTriviaPage)}
+      <Pagination
+        currentPage={triviaPage}
+        totalItems={totalTriviaGames}
+        itemsPerPage={triviaPerPage}
+        onPageChange={setTriviaPage}
+      />
     </div>
   );
 
@@ -1123,7 +1106,12 @@ export const ContentManagement: React.FC = () => {
         </div>
       )}
       
-      {renderPagination(badgesPage, totalBadges, badgesPerPage, setBadgesPage)}
+      <Pagination
+        currentPage={badgesPage}
+        totalItems={totalBadges}
+        itemsPerPage={badgesPerPage}
+        onPageChange={setBadgesPage}
+      />
     </div>
   );
 
@@ -1168,65 +1156,32 @@ export const ContentManagement: React.FC = () => {
       
       {/* Create Category Modal */}
       {showCategoryModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-8 relative animate-slide-up">
-            <button
-              onClick={() => setShowCategoryModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              ×
-            </button>
-
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Category</h2>
-
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Category Name *
-                </label>
-                <input
-                  type="text"
-                  value={newCategory.name}
-                  onChange={(e) => setNewCategory(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="Enter category name"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description (Optional)
-                </label>
-                <textarea
-                  value={newCategory.description}
-                  onChange={(e) => setNewCategory(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="Provide a description for this category"
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex justify-end space-x-4">
-                <button
-                  type="button"
-                  onClick={() => setShowCategoryModal(false)}
-                  className="px-6 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCreateCategory}
-                  disabled={!newCategory.name.trim() || loading}
-                  className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-6 py-3 rounded-lg hover:from-primary-700 hover:to-primary-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Creating...' : 'Create Category'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AddEditCategoryModal
+          isOpen={showCategoryModal}
+          onClose={() => setShowCategoryModal(false)}
+          onSave={() => {
+            fetchCategories();
+            setShowCategoryModal(false);
+          }}
+          category={null}
+        />
+      )}
+      
+      {/* Edit Category Modal */}
+      {showEditCategoryModal && selectedCategory && (
+        <AddEditCategoryModal
+          isOpen={showEditCategoryModal}
+          onClose={() => {
+            setShowEditCategoryModal(false);
+            setSelectedCategory(null);
+          }}
+          onSave={() => {
+            fetchCategories();
+            setShowEditCategoryModal(false);
+            setSelectedCategory(null);
+          }}
+          category={selectedCategory}
+        />
       )}
       
       {/* Create Poll Modal */}
