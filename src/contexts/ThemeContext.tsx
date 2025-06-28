@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useSettings } from './SettingsContext';
 
 type Theme = 'light' | 'dark';
 
@@ -20,19 +19,12 @@ export const useTheme = (): ThemeContextType => {
 };
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { generalSettings, loading } = useSettings();
-  
   // Check if user has a saved theme preference
   const getSavedTheme = (): Theme => {
     // First check localStorage
     const savedTheme = localStorage.getItem('theme') as Theme | null;
     if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark')) {
       return savedTheme;
-    }
-    
-    // If no saved theme and settings are loaded, use the default theme from settings
-    if (!loading && generalSettings.defaultTheme && generalSettings.defaultTheme !== 'system') {
-      return generalSettings.defaultTheme as Theme;
     }
     
     // Then check system preference
@@ -45,6 +37,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const [theme, setThemeState] = useState<Theme>(getSavedTheme);
+  const [allowThemeSelection, setAllowThemeSelection] = useState<boolean>(true);
 
   // Apply theme to document when it changes
   useEffect(() => {
@@ -60,21 +53,43 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Update theme when settings change
+  // Load settings after component mounts to avoid context dependency issues
   useEffect(() => {
-    if (!loading && generalSettings.defaultTheme) {
-      // Only update if user hasn't explicitly set a preference
-      if (!localStorage.getItem('theme')) {
-        if (generalSettings.defaultTheme === 'system') {
-          // Use system preference
-          const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-          setThemeState(isDarkMode ? 'dark' : 'light');
-        } else if (generalSettings.defaultTheme === 'light' || generalSettings.defaultTheme === 'dark') {
-          setThemeState(generalSettings.defaultTheme);
+    const loadSettingsAsync = async () => {
+      try {
+        // Dynamically import the settings context to avoid circular dependency
+        const { useSettings } = await import('./SettingsContext');
+        
+        // We can't use the hook here, so we'll access settings directly
+        // This is a workaround to avoid the context dependency issue
+        const settingsModule = await import('../services/settingsService');
+        const { data } = await settingsModule.SettingsService.getSettings('general');
+        
+        if (data) {
+          // Update theme selection permission
+          if (data.allowThemeSelection !== undefined) {
+            setAllowThemeSelection(data.allowThemeSelection);
+          }
+          
+          // Only update theme if user hasn't explicitly set a preference
+          if (!localStorage.getItem('theme')) {
+            if (data.defaultTheme === 'system') {
+              // Use system preference
+              const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+              setThemeState(isDarkMode ? 'dark' : 'light');
+            } else if (data.defaultTheme === 'light' || data.defaultTheme === 'dark') {
+              setThemeState(data.defaultTheme);
+            }
+          }
         }
+      } catch (error) {
+        console.warn('Failed to load theme settings:', error);
+        // Continue with default behavior
       }
-    }
-  }, [generalSettings, loading]);
+    };
+
+    loadSettingsAsync();
+  }, []);
 
   // Listen for system preference changes
   useEffect(() => {
@@ -82,27 +97,25 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     
     const handleChange = () => {
       // Only update if user hasn't explicitly set a preference
-      // or if the default theme is set to 'system'
-      if (!localStorage.getItem('theme') || 
-          (generalSettings.defaultTheme === 'system' && !localStorage.getItem('theme'))) {
+      if (!localStorage.getItem('theme')) {
         setThemeState(mediaQuery.matches ? 'dark' : 'light');
       }
     };
     
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [generalSettings]);
+  }, []);
 
   const toggleTheme = () => {
     // Only allow toggling if theme selection is enabled in settings
-    if (generalSettings.allowThemeSelection !== false) {
+    if (allowThemeSelection) {
       setThemeState(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
     }
   };
 
   const setTheme = (newTheme: Theme) => {
     // Only allow setting if theme selection is enabled in settings
-    if (generalSettings.allowThemeSelection !== false) {
+    if (allowThemeSelection) {
       setThemeState(newTheme);
     }
   };
