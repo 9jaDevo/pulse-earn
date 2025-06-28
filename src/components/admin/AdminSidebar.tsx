@@ -10,11 +10,12 @@ import {
   Zap,
   Gift,
   DollarSign,
-  FileImage
+  FileImage,
+  BarChart
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-type AdminSection = 'overview' | 'users' | 'content' | 'analytics' | 'moderation' | 'settings' | 'rewards' | 'payouts' | 'marketing';
+type AdminSection = 'overview' | 'users' | 'content' | 'analytics' | 'moderation' | 'settings' | 'rewards' | 'payouts' | 'marketing' | 'promoted';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
@@ -75,6 +76,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       label: 'Marketing Materials',
       icon: FileImage,
       description: 'Manage marketing assets'
+    },
+    {
+      id: 'promoted' as AdminSection,
+      label: 'Promoted Polls',
+      icon: BarChart,
+      description: 'Manage sponsored content'
     },
     {
       id: 'settings' as AdminSection,
