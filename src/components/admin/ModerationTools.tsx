@@ -20,6 +20,7 @@ import { useToast } from '../../hooks/useToast';
 import { Pagination } from '../ui/Pagination';
 import type { ContentReport, ModeratorAction } from '../../types/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 interface ReportDetailModalProps {
   report: ContentReport;
