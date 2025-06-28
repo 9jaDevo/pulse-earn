@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { AmbassadorService } from '../services/ambassadorService';
 import { PayoutService } from '../services/payoutService';
+import { useReferrals } from '../hooks/useReferrals';
 import type { AmbassadorDetails, AmbassadorStats, CountryMetric } from '../types/api';
 import { 
   Users, 
@@ -44,12 +45,21 @@ export const AmbassadorPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'payouts' | 'settings'>('dashboard');
+  const [fetchAttempted, setFetchAttempted] = useState(false);
+  
+  // Initialize the useReferrals hook
+  const { 
+    referredUsers, 
+    loading: referralsLoading, 
+    fetchReferredUsers 
+  } = useReferrals(user?.id);
 
   React.useEffect(() => {
-    if (user) {
+    if (user && !fetchAttempted) {
       fetchAmbassadorData();
+      setFetchAttempted(true);
     }
-  }, [user]);
+  }, [user, fetchAttempted]);
 
   const fetchAmbassadorData = async () => {
     if (!user) return;
@@ -64,6 +74,15 @@ export const AmbassadorPage: React.FC = () => {
         setError(serviceError);
       } else if (data) {
         setAmbassadorData(data);
+      }
+      
+      // Fetch referred users data
+      if (user.id) {
+        await fetchReferredUsers(user.id, {
+          limit: 5,
+          orderBy: 'created_at',
+          order: 'desc'
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
@@ -112,14 +131,6 @@ export const AmbassadorPage: React.FC = () => {
       icon: Target,
       color: 'from-secondary-500 to-secondary-600'
     }
-  ];
-
-  const recentReferrals = [
-    { name: 'Alex M.', joined: '2 days ago', status: 'Active', earned: '$8.50' },
-    { name: 'Sarah K.', joined: '5 days ago', status: 'Active', earned: '$12.30' },
-    { name: 'John D.', joined: '1 week ago', status: 'Active', earned: '$15.75' },
-    { name: 'Emma R.', joined: '1 week ago', status: 'Inactive', earned: '$3.20' },
-    { name: 'Mike T.', joined: '2 weeks ago', status: 'Active', earned: '$22.40' }
   ];
 
   // Get tier information from stats
@@ -229,29 +240,42 @@ export const AmbassadorPage: React.FC = () => {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-xl font-bold text-gray-900 mb-6">Recent Referrals</h2>
           <div className="space-y-4">
-            {recentReferrals.map((referral, index) => (
-              <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-full flex items-center justify-center text-white font-medium">
-                    {referral.name.charAt(0)}
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">{referral.name}</p>
-                    <p className="text-sm text-gray-500">Joined {referral.joined}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-success-600">{referral.earned}</p>
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                    referral.status === 'Active'
-                      ? 'bg-success-100 text-success-700'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {referral.status}
-                  </span>
-                </div>
+            {referralsLoading ? (
+              <div className="text-center py-6">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading referrals...</p>
               </div>
-            ))}
+            ) : referredUsers && referredUsers.length > 0 ? (
+              referredUsers.map((referral, index) => (
+                <div key={referral.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-full flex items-center justify-center text-white font-medium">
+                      {(referral.name || referral.email.charAt(0)).charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{referral.name || referral.email.split('@')[0]}</p>
+                      <p className="text-sm text-gray-500">
+                        Joined {new Date(referral.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-success-600">{referral.points} points</p>
+                    <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-success-100 text-success-700">
+                      Active
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-6 bg-gray-50 rounded-lg">
+                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-700 font-medium mb-2">No referrals yet</p>
+                <p className="text-gray-500 text-sm">
+                  Share your referral link to start earning commissions!
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
