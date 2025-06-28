@@ -108,14 +108,25 @@ export class AmbassadorService {
         // Continue with basic stats even if tier info fails
       }
 
-      // Get current month metrics
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+      // Get current month metrics with proper date calculation
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth(); // 0-based month
+      
+      // Calculate first day of current month
+      const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+      const firstDayString = firstDayOfMonth.toISOString().split('T')[0];
+      
+      // Calculate first day of next month (to use as upper bound)
+      const firstDayOfNextMonth = new Date(currentYear, currentMonth + 1, 1);
+      const firstDayOfNextMonthString = firstDayOfNextMonth.toISOString().split('T')[0];
+
       const { data: monthlyMetrics } = await supabase
         .from('country_metrics')
         .select('ad_revenue')
         .eq('country', ambassador.country)
-        .gte('metric_date', `${currentMonth}-01`)
-        .lte('metric_date', `${currentMonth}-31`);
+        .gte('metric_date', firstDayString)
+        .lt('metric_date', firstDayOfNextMonthString);
 
       const monthlyRevenue = (monthlyMetrics || []).reduce((sum, metric) => sum + metric.ad_revenue, 0);
       const monthlyEarnings = monthlyRevenue * (ambassador.commission_rate / 100);

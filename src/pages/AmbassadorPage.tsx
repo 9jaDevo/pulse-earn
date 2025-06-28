@@ -19,7 +19,8 @@ import {
   Trophy,
   BarChart3,
   Star,
-  Wallet
+  Wallet,
+  Settings
 } from 'lucide-react';
 import { PayoutSettingsForm } from '../components/profile/PayoutSettingsForm';
 import { PayoutRequestForm } from '../components/ambassador/PayoutRequestForm';
