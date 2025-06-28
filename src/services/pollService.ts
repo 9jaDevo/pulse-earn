@@ -357,14 +357,14 @@ export class PollService {
       let slug = baseSlug;
       let counter = 1;
 
-      // Ensure slug is unique
+      // Ensure slug is unique - use maybeSingle() instead of single()
       while (true) {
         const { data: existing } = await supabase
           .from('polls')
           .select('id')
           .eq('slug', slug)
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (!existing) break;
         slug = `${baseSlug}-${counter}`;
