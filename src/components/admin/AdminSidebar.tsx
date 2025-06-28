@@ -8,11 +8,12 @@ import {
   Settings,
   LogOut,
   Zap,
-  Gift
+  Gift,
+  DollarSign
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-type AdminSection = 'overview' | 'users' | 'content' | 'analytics' | 'moderation' | 'settings' | 'rewards';
+type AdminSection = 'overview' | 'users' | 'content' | 'analytics' | 'moderation' | 'settings' | 'rewards' | 'payouts';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
@@ -61,6 +62,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       label: 'Reward Store',
       icon: Gift,
       description: 'Manage rewards and redemptions'
+    },
+    {
+      id: 'payouts' as AdminSection,
+      label: 'Payout Management',
+      icon: DollarSign,
+      description: 'Manage ambassador payouts'
     },
     {
       id: 'settings' as AdminSection,
