@@ -1,6 +1,7 @@
 import { supabase, Database } from '../lib/supabase';
+import { PayoutService } from './payoutService';
 import type { ServiceResponse } from './profileService';
-import type { AmbassadorDetails, CountryMetric, AmbassadorStats } from '../types/api';
+import type { AmbassadorDetails, CountryMetric, AmbassadorStats, CommissionTier } from '../types/api';
 
 type AmbassadorRow = Database['public']['Tables']['ambassadors']['Row'];
 type CountryMetricRow = Database['public']['Tables']['country_metrics']['Row'];
@@ -132,6 +133,9 @@ export class AmbassadorService {
         .order('total_earnings', { ascending: false });
 
       const countryRank = (allAmbassadors || []).findIndex(a => a.total_earnings <= ambassador.total_earnings) + 1;
+      
+      // Get payable balance
+      const { data: payableBalance } = await PayoutService.getPayableBalance(userId);
 
       // Prepare stats object
       const stats: AmbassadorStats = {
@@ -139,7 +143,8 @@ export class AmbassadorService {
         totalEarnings: ambassador.total_earnings,
         monthlyEarnings,
         conversionRate,
-        countryRank: countryRank || 1
+        countryRank: countryRank || 1,
+        payableBalance: payableBalance || 0
       };
 
       // Add tier information if available
@@ -376,6 +381,7 @@ export class AmbassadorService {
     stats: AmbassadorStats;
     recentMetrics: CountryMetric[];
     topCountries: { country: string; value: number }[];
+    payoutHistory: any[];
   }>> {
     try {
       // Get all data in parallel
@@ -383,12 +389,14 @@ export class AmbassadorService {
         ambassadorResult,
         statsResult,
         tierInfoResult,
-        topCountriesResult
+        topCountriesResult,
+        payoutResult
       ] = await Promise.all([
         this.getAmbassadorDetails(userId),
         this.getAmbassadorStats(userId),
         supabase.rpc('get_ambassador_tier', { p_ambassador_id: userId }),
-        this.getTopCountries('ad_revenue', 5)
+        this.getTopCountries('ad_revenue', 5),
+        PayoutService.getUserPayoutRequests(userId, { limit: 5 })
       ]);
 
       if (ambassadorResult.error) {
@@ -428,7 +436,8 @@ export class AmbassadorService {
           ambassador: ambassadorResult.data,
           stats: enhancedStats,
           recentMetrics: countryMetrics || [],
-          topCountries: topCountriesResult.data || []
+          topCountries: topCountriesResult.data || [],
+          payoutHistory: payoutResult.data?.requests || []
         },
         error: null
       };
@@ -450,7 +459,7 @@ export class AmbassadorService {
       isActive?: boolean;
     } = {}
   ): Promise<ServiceResponse<{
-    tiers: any[];
+    tiers: CommissionTier[];
     totalCount: number;
   }>> {
     try {
@@ -498,7 +507,7 @@ export class AmbassadorService {
       global_rate: number;
       country_rates?: Record<string, number>;
     }
-  ): Promise<ServiceResponse<any>> {
+  ): Promise<ServiceResponse<CommissionTier>> {
     try {
       // Check if user is admin
       const { data: adminProfile, error: adminError } = await supabase
@@ -548,7 +557,7 @@ export class AmbassadorService {
       country_rates?: Record<string, number>;
       is_active?: boolean;
     }
-  ): Promise<ServiceResponse<any>> {
+  ): Promise<ServiceResponse<CommissionTier>> {
     try {
       // Check if user is admin
       const { data: adminProfile, error: adminError } = await supabase
