@@ -6,7 +6,8 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 console.log('[Supabase] Initializing Supabase client with:', {
   hasUrl: !!supabaseUrl,
   hasAnonKey: !!supabaseAnonKey,
-  url: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'undefined'
+  url: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'undefined',
+  keyLength: supabaseAnonKey ? supabaseAnonKey.length : 0
 });
 
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -27,8 +28,22 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true
   },
   global: {
+    headers: {
+      'apikey': supabaseAnonKey,
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
     fetch: (url, options = {}) => {
       console.log('[Supabase] Making request to:', url);
+      
+      // Ensure API key is always included in headers
+      const headers = {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      };
       
       // Add timeout and better error handling
       const controller = new AbortController();
@@ -36,11 +51,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       
       return fetch(url, {
         ...options,
-        signal: controller.signal,
-        headers: {
-          ...options.headers,
-          'Cache-Control': 'no-cache',
-        }
+        headers,
+        signal: controller.signal
       }).then(response => {
         clearTimeout(timeoutId);
         console.log('[Supabase] Response status:', response.status);
