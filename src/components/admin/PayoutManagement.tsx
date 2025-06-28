@@ -16,7 +16,8 @@ import {
   Info,
   FileText,
   CreditCard,
-  Send
+  Send,
+  Plus
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PayoutService } from '../../services/payoutService';
