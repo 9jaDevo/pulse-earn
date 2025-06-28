@@ -560,7 +560,11 @@ export const SystemSettings: React.FC = () => {
                 placeholder="ca-pub-xxxxxxxxxxxxxxxxx"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Your Google AdSense Publisher ID (e.g., ca-pub-1234567890123456)
+              </p>
             </div>
+            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Header Ad Slot
@@ -572,7 +576,75 @@ export const SystemSettings: React.FC = () => {
                 placeholder="1234567890"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Ad unit slot ID for the header ad
+              </p>
             </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Footer Ad Slot
+              </label>
+              <input
+                type="text"
+                value={settings.integrations.adsenseFooterSlot || ''}
+                onChange={(e) => updateSetting('integrations', 'adsenseFooterSlot', e.target.value)}
+                placeholder="0987654321"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Ad unit slot ID for the footer ad
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Sidebar Ad Slot
+              </label>
+              <input
+                type="text"
+                value={settings.integrations.adsenseSidebarSlot || ''}
+                onChange={(e) => updateSetting('integrations', 'adsenseSidebarSlot', e.target.value)}
+                placeholder="1122334455"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Ad unit slot ID for the sidebar ad
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Content Ad Slot
+              </label>
+              <input
+                type="text"
+                value={settings.integrations.adsenseContentSlot || ''}
+                onChange={(e) => updateSetting('integrations', 'adsenseContentSlot', e.target.value)}
+                placeholder="5544332211"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Ad unit slot ID for in-content ads
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mobile Ad Slot
+              </label>
+              <input
+                type="text"
+                value={settings.integrations.adsenseMobileSlot || ''}
+                onChange={(e) => updateSetting('integrations', 'adsenseMobileSlot', e.target.value)}
+                placeholder="9988776655"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Ad unit slot ID for mobile-specific ads
+              </p>
+            </div>
+            
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-gray-900">Enable Ads</p>

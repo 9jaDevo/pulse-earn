@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { SettingsService } from '../../services/settingsService';
+import { useAds } from '../../contexts/AdContext';
 
 interface AdSenseAdProps {
   slot: string;
@@ -29,34 +29,24 @@ export const AdSenseAd: React.FC<AdSenseAdProps> = ({
   const location = useLocation();
   const [adKey, setAdKey] = useState(0);
   const [pageVisits, setPageVisits] = useState(0);
-  const [adsenseClientId, setAdsenseClientId] = useState<string | null>(null);
-  const [adsenseEnabled, setAdsenseEnabled] = useState<boolean>(false);
+  const { adsEnabled, adsenseClientId } = useAds();
   const [scriptLoaded, setScriptLoaded] = useState(false);
 
-  // Load AdSense settings from database
+  // Track page visits for ad refresh
   useEffect(() => {
-    const loadAdSenseSettings = async () => {
-      try {
-        const { data, error } = await SettingsService.getSettings('integrations');
-        
-        if (error || !data) {
-          console.warn('Failed to load AdSense settings:', error);
-          return;
-        }
-        
-        setAdsenseClientId(data.adsenseClientId || null);
-        setAdsenseEnabled(data.adsenseEnabled !== false); // Default to true if not explicitly set to false
-      } catch (err) {
-        console.error('Error loading AdSense settings:', err);
-      }
-    };
-    
-    loadAdSenseSettings();
-  }, []);
+    const visits = parseInt(sessionStorage.getItem('pageVisits') || '0') + 1;
+    setPageVisits(visits);
+    sessionStorage.setItem('pageVisits', visits.toString());
+
+    // Refresh ads every 3 page visits
+    if (visits % 3 === 0) {
+      setAdKey(prev => prev + 1);
+    }
+  }, [location.pathname]);
 
   // Dynamically load AdSense script when settings are available
   useEffect(() => {
-    if (adsenseEnabled && adsenseClientId && !scriptLoaded) {
+    if (adsEnabled && adsenseClientId && !scriptLoaded) {
       // Check if script is already loaded
       const existingScript = document.querySelector(`script[src*="adsbygoogle.js"]`);
       if (existingScript) {
@@ -81,23 +71,11 @@ export const AdSenseAd: React.FC<AdSenseAdProps> = ({
       
       document.head.appendChild(script);
     }
-  }, [adsenseEnabled, adsenseClientId, scriptLoaded]);
-
-  // Track page visits for ad refresh
-  useEffect(() => {
-    const visits = parseInt(sessionStorage.getItem('pageVisits') || '0') + 1;
-    setPageVisits(visits);
-    sessionStorage.setItem('pageVisits', visits.toString());
-
-    // Refresh ads every 3 page visits
-    if (visits % 3 === 0) {
-      setAdKey(prev => prev + 1);
-    }
-  }, [location.pathname]);
+  }, [adsEnabled, adsenseClientId, scriptLoaded]);
 
   // Initialize ad when settings and script are ready
   useEffect(() => {
-    if (!adsenseEnabled || !adsenseClientId || !scriptLoaded || !slot) return;
+    if (!adsEnabled || !adsenseClientId || !scriptLoaded || !slot) return;
 
     const loadAd = () => {
       try {
@@ -119,10 +97,10 @@ export const AdSenseAd: React.FC<AdSenseAdProps> = ({
     // Small delay to ensure DOM is ready
     const timer = setTimeout(loadAd, 100);
     return () => clearTimeout(timer);
-  }, [adsenseEnabled, adsenseClientId, scriptLoaded, slot, adKey]);
+  }, [adsEnabled, adsenseClientId, scriptLoaded, slot, adKey]);
 
   // Don't render anything if AdSense is disabled or client ID is missing
-  if (!adsenseEnabled || !adsenseClientId) {
+  if (!adsEnabled || !adsenseClientId || !slot) {
     return null;
   }
 
