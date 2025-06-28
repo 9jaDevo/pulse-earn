@@ -12,6 +12,7 @@ export { ModerationService } from './moderationService';
 export { AmbassadorService } from './ambassadorService';
 export { ReferralService } from './referralService';
 export { AdminService } from './adminService';
+export { MarketingService } from './marketingService';
 export type { ServiceResponse } from './profileService';
 
 // Future service exports will go here:

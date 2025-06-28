@@ -20,14 +20,18 @@ import {
   BarChart3,
   Star,
   Wallet,
-  Settings
+  Settings,
+  FileText
 } from 'lucide-react';
 import { PayoutSettingsForm } from '../components/profile/PayoutSettingsForm';
 import { PayoutRequestForm } from '../components/ambassador/PayoutRequestForm';
 import { PayoutHistoryTable } from '../components/ambassador/PayoutHistoryTable';
+import { MarketingMaterialsSection } from '../components/ambassador/MarketingMaterialsSection';
+import { useSettings } from '../contexts/SettingsContext';
 
 export const AmbassadorPage: React.FC = () => {
   const { user, profile } = useAuth();
+  const { generalSettings } = useSettings();
   const [referralCode] = useState(profile?.referral_code || 'LOADING');
   const [copiedCode, setCopiedCode] = useState(false);
   const [ambassadorData, setAmbassadorData] = useState<{
@@ -45,7 +49,7 @@ export const AmbassadorPage: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'payouts' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'payouts' | 'settings' | 'marketing'>('dashboard');
   const [fetchAttempted, setFetchAttempted] = useState(false);
   
   // Initialize the useReferrals hook
@@ -422,8 +426,11 @@ export const AmbassadorPage: React.FC = () => {
               <DollarSign className="h-5 w-5" />
               <span>Request Payout</span>
             </button>
-            <button className="w-full bg-gradient-to-r from-secondary-600 to-secondary-700 text-white p-3 rounded-lg hover:from-secondary-700 hover:to-secondary-800 transition-all flex items-center justify-center space-x-2">
-              <ExternalLink className="h-5 w-5" />
+            <button 
+              onClick={() => setActiveTab('marketing')}
+              className="w-full bg-gradient-to-r from-secondary-600 to-secondary-700 text-white p-3 rounded-lg hover:from-secondary-700 hover:to-secondary-800 transition-all flex items-center justify-center space-x-2"
+            >
+              <FileText className="h-5 w-5" />
               <span>Marketing Materials</span>
             </button>
             <button className="w-full bg-gradient-to-r from-accent-600 to-accent-700 text-white p-3 rounded-lg hover:from-accent-700 hover:to-accent-800 transition-all flex items-center justify-center space-x-2">
@@ -516,6 +523,10 @@ export const AmbassadorPage: React.FC = () => {
       </div>
     </div>
   );
+  
+  const renderMarketing = () => (
+    <MarketingMaterialsSection />
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -590,6 +601,17 @@ export const AmbassadorPage: React.FC = () => {
               <span>Payouts</span>
             </button>
             <button
+              onClick={() => setActiveTab('marketing')}
+              className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors ${
+                activeTab === 'marketing'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <FileText className="h-4 w-4" />
+              <span>Marketing Materials</span>
+            </button>
+            <button
               onClick={() => setActiveTab('settings')}
               className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors ${
                 activeTab === 'settings'
@@ -606,6 +628,7 @@ export const AmbassadorPage: React.FC = () => {
         {/* Content based on active tab */}
         {activeTab === 'dashboard' && renderDashboard()}
         {activeTab === 'payouts' && renderPayouts()}
+        {activeTab === 'marketing' && renderMarketing()}
         {activeTab === 'settings' && renderSettings()}
       </div>
     </div>
