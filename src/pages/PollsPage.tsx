@@ -64,7 +64,9 @@ export const PollsPage: React.FC = () => {
     setIsLoadingCategories(true);
     const { data, error } = await PollService.getAllPollCategories();
     if (!error && data) {
-      setCategories(data);
+      // Extract only the name property from each category object
+      const categoryNames = data.map(category => category.name);
+      setCategories(categoryNames);
     }
     setIsLoadingCategories(false);
   };
