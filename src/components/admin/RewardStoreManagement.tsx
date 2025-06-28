@@ -18,7 +18,9 @@ import {
 } from 'lucide-react';
 import { RewardService } from '../../services/rewardService';
 import { useToast } from '../../hooks/useToast';
+import { Pagination } from '../ui/Pagination';
 import type { RewardStoreItem, RedeemedItem } from '../../types/api';
+import { supabase } from '../../lib/supabase';
 
 export const RewardStoreManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'items' | 'redemptions'>('items');
@@ -34,6 +36,15 @@ export const RewardStoreManagement: React.FC = () => {
   const [itemTypeFilter, setItemTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const { successToast, errorToast } = useToast();
+
+  // Pagination state
+  const [itemsPage, setItemsPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  
+  const [redemptionsPage, setRedemptionsPage] = useState(1);
+  const [redemptionsPerPage, setRedemptionsPerPage] = useState(10);
+  const [totalRedemptions, setTotalRedemptions] = useState(0);
 
   // New item form state
   const [itemForm, setItemForm] = useState<Partial<RewardStoreItem>>({
@@ -61,22 +72,41 @@ export const RewardStoreManagement: React.FC = () => {
     } else {
       fetchRedemptions();
     }
-  }, [activeTab]);
+  }, [activeTab, itemsPage, redemptionsPage, itemsPerPage, redemptionsPerPage]);
 
   const fetchStoreItems = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const { data, error: serviceError } = await RewardService.getRewardStoreItems({
-        limit: 100
-      });
+      // Calculate offset based on current page and items per page
+      const offset = (itemsPage - 1) * itemsPerPage;
+      
+      // Prepare filter options
+      const options: any = {
+        limit: itemsPerPage,
+        offset: offset
+      };
+      
+      if (itemTypeFilter !== 'all') {
+        options.itemType = itemTypeFilter;
+      }
+      
+      // Fetch items with pagination
+      const { data, error: serviceError } = await RewardService.getRewardStoreItems(options);
       
       if (serviceError) {
         setError(serviceError);
         errorToast(serviceError);
       } else {
         setStoreItems(data || []);
+        
+        // Get total count for pagination
+        const { count } = await supabase
+          .from('reward_store_items')
+          .select('*', { count: 'exact', head: true });
+        
+        setTotalItems(count || 0);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
@@ -92,19 +122,49 @@ export const RewardStoreManagement: React.FC = () => {
     setError(null);
     
     try {
-      // In a real implementation, this would fetch all redemptions
-      // For now, we'll simulate it with a mock API call
-      const { data, error: serviceError } = await supabase
+      // Calculate offset based on current page and items per page
+      const offset = (redemptionsPage - 1) * redemptionsPerPage;
+      
+      // Build query with pagination
+      let query = supabase
         .from('redeemed_items')
         .select('*')
-        .order('redeemed_at', { ascending: false })
-        .limit(100);
+        .range(offset, offset + redemptionsPerPage - 1)
+        .order('redeemed_at', { ascending: false });
       
-      if (serviceError) {
-        setError(serviceError.message);
-        errorToast(serviceError.message);
+      // Apply status filter if selected
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+      
+      // Apply search filter if provided
+      if (searchTerm) {
+        query = query.or(`item_name.ilike.%${searchTerm}%,item_id.ilike.%${searchTerm}%`);
+      }
+      
+      const { data, error: fetchError } = await query;
+      
+      if (fetchError) {
+        setError(fetchError.message);
+        errorToast(fetchError.message);
       } else {
         setRedemptions(data || []);
+        
+        // Get total count for pagination
+        let countQuery = supabase
+          .from('redeemed_items')
+          .select('*', { count: 'exact', head: true });
+        
+        if (statusFilter !== 'all') {
+          countQuery = countQuery.eq('status', statusFilter);
+        }
+        
+        if (searchTerm) {
+          countQuery = countQuery.or(`item_name.ilike.%${searchTerm}%,item_id.ilike.%${searchTerm}%`);
+        }
+        
+        const { count } = await countQuery;
+        setTotalRedemptions(count || 0);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
@@ -147,7 +207,7 @@ export const RewardStoreManagement: React.FC = () => {
         errorToast(`Failed to create item: ${error.message}`);
       } else {
         successToast('Reward item created successfully!');
-        setStoreItems(prev => [...prev, data]);
+        fetchStoreItems(); // Refresh the list
         setShowItemModal(false);
         resetItemForm();
       }
@@ -193,7 +253,7 @@ export const RewardStoreManagement: React.FC = () => {
         errorToast(`Failed to update item: ${error.message}`);
       } else {
         successToast('Reward item updated successfully!');
-        setStoreItems(prev => prev.map(item => item.id === data.id ? data : item));
+        fetchStoreItems(); // Refresh the list
         setShowItemModal(false);
         setSelectedItem(null);
       }
@@ -230,7 +290,7 @@ export const RewardStoreManagement: React.FC = () => {
         errorToast(`Failed to update redemption: ${error.message}`);
       } else {
         successToast('Redemption updated successfully!');
-        setRedemptions(prev => prev.map(item => item.id === data.id ? data : item));
+        fetchRedemptions(); // Refresh the list
         setShowRedemptionModal(false);
         setSelectedRedemption(null);
       }
@@ -348,6 +408,17 @@ export const RewardStoreManagement: React.FC = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const handleSearch = () => {
+    // Reset to first page when searching
+    if (activeTab === 'items') {
+      setItemsPage(1);
+      fetchStoreItems();
+    } else {
+      setRedemptionsPage(1);
+      fetchRedemptions();
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -382,7 +453,7 @@ export const RewardStoreManagement: React.FC = () => {
       {/* Store Items Tab */}
       {activeTab === 'items' && (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex-1 max-w-md">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -390,16 +461,21 @@ export const RewardStoreManagement: React.FC = () => {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   placeholder="Search items..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
             </div>
             
-            <div className="flex space-x-4">
+            <div className="flex flex-wrap gap-2">
               <select
                 value={itemTypeFilter}
-                onChange={(e) => setItemTypeFilter(e.target.value)}
+                onChange={(e) => {
+                  setItemTypeFilter(e.target.value);
+                  setItemsPage(1); // Reset to first page when filter changes
+                  setTimeout(() => fetchStoreItems(), 0);
+                }}
                 className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 <option value="all">All Types</option>
@@ -408,6 +484,21 @@ export const RewardStoreManagement: React.FC = () => {
                 <option value="paypal_payout">PayPal</option>
                 <option value="bank_transfer">Bank Transfers</option>
                 <option value="physical_item">Physical Items</option>
+              </select>
+              
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setItemsPage(1); // Reset to first page when items per page changes
+                  setTimeout(() => fetchStoreItems(), 0);
+                }}
+                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="10">10 per page</option>
+                <option value="25">25 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
               </select>
               
               <button
@@ -523,7 +614,7 @@ export const RewardStoreManagement: React.FC = () => {
                                       errorToast(`Failed to delete item: ${error.message}`);
                                     } else {
                                       successToast('Item deleted successfully');
-                                      setStoreItems(prev => prev.filter(i => i.id !== item.id));
+                                      fetchStoreItems(); // Refresh the list
                                     }
                                   } catch (err) {
                                     errorToast('An unexpected error occurred');
@@ -554,6 +645,14 @@ export const RewardStoreManagement: React.FC = () => {
                   </p>
                 </div>
               )}
+              
+              {/* Pagination */}
+              <Pagination
+                currentPage={itemsPage}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setItemsPage}
+              />
             </div>
           )}
         </div>
@@ -562,7 +661,7 @@ export const RewardStoreManagement: React.FC = () => {
       {/* Redemptions Tab */}
       {activeTab === 'redemptions' && (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex-1 max-w-md">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -570,22 +669,42 @@ export const RewardStoreManagement: React.FC = () => {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   placeholder="Search redemptions..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
             </div>
             
-            <div className="flex space-x-4">
+            <div className="flex flex-wrap gap-2">
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setRedemptionsPage(1); // Reset to first page when filter changes
+                  setTimeout(() => fetchRedemptions(), 0);
+                }}
                 className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 <option value="all">All Statuses</option>
                 <option value="pending_fulfillment">Pending</option>
                 <option value="fulfilled">Fulfilled</option>
                 <option value="cancelled">Cancelled</option>
+              </select>
+              
+              <select
+                value={redemptionsPerPage}
+                onChange={(e) => {
+                  setRedemptionsPerPage(Number(e.target.value));
+                  setRedemptionsPage(1); // Reset to first page when items per page changes
+                  setTimeout(() => fetchRedemptions(), 0);
+                }}
+                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="10">10 per page</option>
+                <option value="25">25 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
               </select>
               
               <button
@@ -698,6 +817,14 @@ export const RewardStoreManagement: React.FC = () => {
                   </p>
                 </div>
               )}
+              
+              {/* Pagination */}
+              <Pagination
+                currentPage={redemptionsPage}
+                totalItems={totalRedemptions}
+                itemsPerPage={redemptionsPerPage}
+                onPageChange={setRedemptionsPage}
+              />
             </div>
           )}
         </div>

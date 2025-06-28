@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ModerationService } from '../../services/moderationService';
 import { useToast } from '../../hooks/useToast';
+import { Pagination } from '../ui/Pagination';
 import type { ContentReport } from '../../types/api';
 
 interface ReportDetailModalProps {
@@ -142,18 +143,27 @@ export const ModerationTools: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const { successToast, errorToast } = useToast();
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  
   useEffect(() => {
     fetchReports();
-  }, [statusFilter]);
+  }, [statusFilter, currentPage, itemsPerPage]);
   
   const fetchReports = async () => {
     setLoading(true);
     setError(null);
     
     try {
+      // Calculate offset based on current page and items per page
+      const offset = (currentPage - 1) * itemsPerPage;
+      
       const { data, error: fetchError } = await ModerationService.getContentReports({
         status: statusFilter as any,
-        limit: 50
+        limit: itemsPerPage,
+        offset: offset
       });
       
       if (fetchError) {
@@ -162,6 +172,16 @@ export const ModerationTools: React.FC = () => {
       }
       
       setReports(data || []);
+      
+      // Get total count for pagination
+      // In a real implementation, this would be returned from the API
+      // For now, we'll simulate it with a separate query
+      const { count } = await supabase
+        .from('content_reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', statusFilter);
+      
+      setTotalItems(count || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load reports');
     } finally {
@@ -271,13 +291,29 @@ export const ModerationTools: React.FC = () => {
         <div className="flex space-x-2">
           <select 
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setCurrentPage(1); // Reset to first page when filter changes
+            }}
             className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
             <option value="pending">Pending</option>
             <option value="reviewed">Reviewed</option>
             <option value="resolved">Resolved</option>
             <option value="rejected">Rejected</option>
+          </select>
+          
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value));
+              setCurrentPage(1); // Reset to first page when items per page changes
+            }}
+            className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="10">10 per page</option>
+            <option value="25">25 per page</option>
+            <option value="50">50 per page</option>
           </select>
         </div>
       </div>
@@ -384,6 +420,14 @@ export const ModerationTools: React.FC = () => {
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination */}
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
     </div>
