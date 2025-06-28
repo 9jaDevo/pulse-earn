@@ -26,52 +26,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true
-  },
-  global: {
-    headers: {
-      'apikey': supabaseAnonKey,
-      'Authorization': `Bearer ${supabaseAnonKey}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
-    },
-    fetch: (url, options = {}) => {
-      console.log('[Supabase] Making request to:', url);
-      
-      // Ensure API key is always included in headers
-      const headers = {
-        'apikey': supabaseAnonKey,
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-        'Content-Type': 'application/json',
-        ...options.headers
-      };
-      
-      // Add timeout and better error handling
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
-      return fetch(url, {
-        ...options,
-        headers,
-        signal: controller.signal
-      }).then(response => {
-        clearTimeout(timeoutId);
-        console.log('[Supabase] Response status:', response.status);
-        return response;
-      }).catch(error => {
-        clearTimeout(timeoutId);
-        console.error('[Supabase] Fetch error:', error);
-        
-        if (error.name === 'AbortError') {
-          throw new Error('Request timeout - please check your internet connection');
-        }
-        
-        if (error.message === 'Failed to fetch') {
-          throw new Error('Network error - please check your internet connection and try again');
-        }
-        
-        throw error;
-      });
-    }
   }
 });
 
