@@ -36,6 +36,12 @@ export class ProfileService {
         errorMessage: error?.message
       });
 
+      // Handle the specific case where no profile exists (PGRST116 error)
+      if (error && error.code === 'PGRST116') {
+        console.log('[ProfileService] No profile found for user (PGRST116), returning null data');
+        return { data: null, error: null };
+      }
+
       if (error) {
         return { data: null, error: error.message };
       }
@@ -104,6 +110,12 @@ export class ProfileService {
         errorMessage: error?.message
       });
 
+      // Handle the specific case where no profile exists to update
+      if (error && error.code === 'PGRST116') {
+        console.log('[ProfileService] No profile found to update (PGRST116)');
+        return { data: null, error: 'Profile not found' };
+      }
+
       if (error) {
         return { data: null, error: error.message };
       }
@@ -136,7 +148,7 @@ export class ProfileService {
         .eq('id', adminId)
         .maybeSingle();
 
-      if (adminError) {
+      if (adminError && adminError.code !== 'PGRST116') {
         return { 
           data: null, 
           error: adminError.message 
@@ -301,6 +313,13 @@ export class ProfileService {
         .maybeSingle();
 
       console.log('[ProfileService] Current profile fetch result:', { success: !fetchError, points: currentData?.points });
+      
+      // Handle the specific case where no profile exists
+      if (fetchError && fetchError.code === 'PGRST116') {
+        console.log('[ProfileService] No profile found for user, returning error');
+        return { data: null, error: 'User profile not found' };
+      }
+      
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
@@ -358,6 +377,12 @@ export class ProfileService {
         .maybeSingle();
 
       console.log('[ProfileService] Current profile badges fetch result:', { success: !fetchError, badges: currentData?.badges });
+      
+      // Handle the specific case where no profile exists
+      if (fetchError && fetchError.code === 'PGRST116') {
+        return { data: null, error: 'User profile not found' };
+      }
+      
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
@@ -447,6 +472,13 @@ export class ProfileService {
         .maybeSingle();
 
       console.log('[ProfileService] User points fetch result:', { success: !userError, points: userData?.points });
+      
+      // Handle the specific case where no profile exists
+      if (userError && userError.code === 'PGRST116') {
+        console.log('[ProfileService] No profile found for user, returning rank 0');
+        return { data: 0, error: null };
+      }
+      
       if (userError) {
         return { data: null, error: userError.message };
       }
