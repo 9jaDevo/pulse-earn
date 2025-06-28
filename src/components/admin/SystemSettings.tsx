@@ -11,7 +11,8 @@ import {
   Save,
   RefreshCw,
   Zap,
-  Award
+  Award,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SettingsService } from '../../services/settingsService';
@@ -23,6 +24,7 @@ export const SystemSettings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'general' | 'security' | 'notifications' | 'integrations' | 'points'>('general');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<Record<string, Record<string, any>>>({
     general: {},
     security: {},
@@ -37,32 +39,43 @@ export const SystemSettings: React.FC = () => {
 
   const fetchSettings = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      const { data, error } = await SettingsService.getAllSettings();
+      const { data, error: serviceError } = await SettingsService.getAllSettings();
       
-      if (error) {
-        errorToast(`Failed to load settings: ${error}`);
+      if (serviceError) {
+        setError(serviceError);
+        errorToast(`Failed to load settings: ${serviceError}`);
       } else if (data) {
-        setSettings({
+        // Initialize any missing categories with empty objects
+        const completeSettings = {
           general: data.general || {},
           security: data.security || {},
           notifications: data.notifications || {},
           integrations: data.integrations || {},
           points: data.points || {}
-        });
+        };
+        
+        setSettings(completeSettings);
       }
     } catch (err) {
-      errorToast('An error occurred while loading settings');
-      console.error(err);
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred while loading settings';
+      setError(errorMessage);
+      errorToast(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user) {
+      errorToast('You must be logged in to update settings');
+      return;
+    }
     
     setSaving(true);
+    setError(null);
     
     try {
       // Save each category of settings
@@ -76,13 +89,16 @@ export const SystemSettings: React.FC = () => {
       const errors = results.filter(result => result.error);
       
       if (errors.length > 0) {
-        errorToast(`Failed to save some settings: ${errors[0].error}`);
+        const errorMessage = errors.map(e => e.error).join(', ');
+        setError(`Failed to save some settings: ${errorMessage}`);
+        errorToast(`Failed to save some settings: ${errorMessage}`);
       } else {
         successToast('Settings saved successfully');
       }
     } catch (err) {
-      errorToast('An error occurred while saving settings');
-      console.error(err);
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred while saving settings';
+      setError(errorMessage);
+      errorToast(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -641,6 +657,17 @@ export const SystemSettings: React.FC = () => {
           <span>{saving ? 'Saving...' : 'Save Changes'}</span>
         </button>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-error-50 border border-error-200 text-error-700 px-4 py-3 rounded-lg flex items-start">
+          <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Error</p>
+            <p>{error}</p>
+          </div>
+        </div>
+      )}
 
       {/* Loading State */}
       {loading && (
