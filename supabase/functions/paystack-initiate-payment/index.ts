@@ -46,6 +46,12 @@ serve(async (req) => {
       });
     }
     
+    // Get frontend URL and ensure it doesn't end with a trailing slash
+    let frontendUrl = Deno.env.get("FRONTEND_URL") || "http://localhost:5173";
+    if (frontendUrl.endsWith('/')) {
+      frontendUrl = frontendUrl.slice(0, -1);
+    }
+    
     // Make a request to Paystack API to initialize a transaction
     const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
@@ -56,7 +62,7 @@ serve(async (req) => {
       body: JSON.stringify({
         email: profile.email,
         amount: Math.round(amount * 100), // Convert to kobo/cents
-        callback_url: `${Deno.env.get("FRONTEND_URL") || "http://localhost:5173"}/dashboard?section=sponsor&payment_status=success&transaction_id=${transactionId}`,
+        callback_url: `${frontendUrl}/dashboard?section=sponsor&payment_status=success&transaction_id=${transactionId}`,
         metadata: {
           user_id: userId,
           transaction_id: transactionId,
