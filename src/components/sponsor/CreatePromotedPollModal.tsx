@@ -54,6 +54,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
   const [stripeInstance, setStripeInstance] = useState<ReturnType<typeof loadStripe> | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [stripeLoadError, setStripeLoadError] = useState<string | null>(null);
   
   // Promotion settings
   const [settings, setSettings] = useState<{
@@ -77,40 +78,54 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
     currency: 'USD'
   });
   
+  // Helper function to validate Stripe key
+  const isValidStripeKey = (key: string): boolean => {
+    return key && 
+           key !== 'your_stripe_publishable_key' && 
+           key !== 'pk_test_placeholder_key_replace_with_actual_stripe_key' &&
+           (key.startsWith('pk_test_') || key.startsWith('pk_live_'));
+  };
+  
   // Load Stripe key from settings
   useEffect(() => {
     const loadStripeKey = async () => {
       try {
+        setStripeLoadError(null);
+        
         // Get Stripe key from settings
         const { data: integrationSettings } = await SettingsService.getSettings('integrations');
         
+        let stripeKey = null;
+        
         if (integrationSettings?.stripePublicKey && 
-            integrationSettings.stripePublicKey !== 'your_stripe_publishable_key') {
-          // Initialize Stripe with the key from settings
-          const stripePromise = loadStripe(integrationSettings.stripePublicKey);
-          setStripeInstance(stripePromise);
+            isValidStripeKey(integrationSettings.stripePublicKey)) {
+          stripeKey = integrationSettings.stripePublicKey;
         } else {
           // Fall back to environment variable
           const envStripeKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-          if (envStripeKey && envStripeKey !== 'your_stripe_publishable_key') {
-            const stripePromise = loadStripe(envStripeKey);
+          if (isValidStripeKey(envStripeKey)) {
+            stripeKey = envStripeKey;
+          }
+        }
+        
+        if (stripeKey) {
+          try {
+            const stripePromise = loadStripe(stripeKey);
             setStripeInstance(stripePromise);
-          } else {
-            console.warn('No valid Stripe public key found in settings or environment variables');
+          } catch (err) {
+            console.error('Error loading Stripe:', err);
+            setStripeLoadError('Failed to load Stripe payment system');
             setStripeInstance(null);
           }
+        } else {
+          console.warn('No valid Stripe public key found');
+          setStripeLoadError('Stripe payment system is not configured');
+          setStripeInstance(null);
         }
       } catch (err) {
         console.error('Error loading Stripe key from settings:', err);
-        
-        // Fall back to environment variable
-        const envStripeKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-        if (envStripeKey && envStripeKey !== 'your_stripe_publishable_key') {
-          const stripePromise = loadStripe(envStripeKey);
-          setStripeInstance(stripePromise);
-        } else {
-          setStripeInstance(null);
-        }
+        setStripeLoadError('Failed to load payment configuration');
+        setStripeInstance(null);
       }
     };
     
@@ -195,9 +210,9 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         return;
       }
       
-      // Filter out Stripe payment methods if Stripe is not configured
+      // Filter out Stripe payment methods if Stripe is not configured or has errors
       const filteredMethods = data?.filter(method => {
-        if (method.type === 'stripe' && !stripeInstance) {
+        if (method.type === 'stripe' && (!stripeInstance || stripeLoadError)) {
           return false;
         }
         return true;
@@ -229,9 +244,9 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         return;
       }
       
-      // Filter out Stripe payment methods if Stripe is not configured
+      // Filter out Stripe payment methods if Stripe is not configured or has errors
       const filteredMethods = data?.filter(method => {
-        if (method.type === 'stripe' && !stripeInstance) {
+        if (method.type === 'stripe' && (!stripeInstance || stripeLoadError)) {
           return false;
         }
         return true;
@@ -350,8 +365,8 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         throw new Error('Invalid payment method');
       }
       
-      if (selectedMethod.type === 'stripe' && !stripeInstance) {
-        throw new Error('Stripe is not configured. Please contact support.');
+      if (selectedMethod.type === 'stripe' && (!stripeInstance || stripeLoadError)) {
+        throw new Error('Stripe payment system is not available. Please contact support or use an alternative payment method.');
       }
       
       if (selectedMethod.type === 'wallet') {
@@ -371,8 +386,8 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         onSuccess();
         onClose();
       } else if (selectedMethod.type === 'stripe') {
-        if (!stripeInstance) {
-          throw new Error('Stripe is not configured. Please contact support.');
+        if (!stripeInstance || stripeLoadError) {
+          throw new Error('Stripe payment system is not available. Please contact support or use an alternative payment method.');
         }
         
         // Initialize Stripe payment
@@ -492,6 +507,19 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
             Promote a Poll
           </h2>
         </div>
+        
+        {/* Stripe Configuration Warning */}
+        {stripeLoadError && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start space-x-3 mb-6">
+            <AlertCircle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-medium text-yellow-800 mb-1">Payment System Notice</h3>
+              <p className="text-yellow-700 text-sm">
+                {stripeLoadError}. Credit card payments are currently unavailable, but you can still use other payment methods.
+              </p>
+            </div>
+          </div>
+        )}
         
         {/* Step Indicator */}
         <div className="mb-8">
