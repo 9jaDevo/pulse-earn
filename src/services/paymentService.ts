@@ -281,6 +281,7 @@ export class PaymentService {
         .update(updateData)
         .eq('id', transactionId)
         .select()
+        .order('id', { ascending: true })
         .limit(1);
       
       if (error) {
