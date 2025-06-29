@@ -281,10 +281,14 @@ export class PaymentService {
         .update(updateData)
         .eq('id', transactionId)
         .select()
-        .single();
+        .maybeSingle();
       
       if (error) {
         return { data: null, error: error.message };
+      }
+      
+      if (!data) {
+        return { data: null, error: 'Transaction not found' };
       }
       
       // Note: We're removing the direct update to promoted_polls here
