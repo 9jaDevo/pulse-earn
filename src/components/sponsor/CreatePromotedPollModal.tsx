@@ -24,10 +24,6 @@ import { StripePaymentForm } from './StripePaymentForm';
 import type { Poll, PaymentMethod } from '../../types/api';
 import getSymbolFromCurrency from 'currency-symbol-map';
 
-// Initialize Stripe outside of component to avoid re-initialization
-// We'll set this dynamically once we fetch the key from settings
-let stripePromise: ReturnType<typeof loadStripe> | null = null;
-
 interface CreatePromotedPollModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -53,9 +49,9 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
   const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>(['USD']);
   const [loadingCurrencies, setLoadingCurrencies] = useState(true);
-  const [stripeKeyLoaded, setStripeKeyLoaded] = useState(false);
   
-  // Stripe payment state
+  // Stripe state
+  const [stripeInstance, setStripeInstance] = useState<ReturnType<typeof loadStripe> | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState<string | null>(null);
   
@@ -91,17 +87,17 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         if (integrationSettings?.stripePublicKey && 
             integrationSettings.stripePublicKey !== 'your_stripe_publishable_key') {
           // Initialize Stripe with the key from settings
-          stripePromise = loadStripe(integrationSettings.stripePublicKey);
-          setStripeKeyLoaded(true);
+          const stripePromise = loadStripe(integrationSettings.stripePublicKey);
+          setStripeInstance(stripePromise);
         } else {
           // Fall back to environment variable
           const envStripeKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
           if (envStripeKey && envStripeKey !== 'your_stripe_publishable_key') {
-            stripePromise = loadStripe(envStripeKey);
-            setStripeKeyLoaded(true);
+            const stripePromise = loadStripe(envStripeKey);
+            setStripeInstance(stripePromise);
           } else {
             console.warn('No valid Stripe public key found in settings or environment variables');
-            stripePromise = null;
+            setStripeInstance(null);
           }
         }
       } catch (err) {
@@ -110,10 +106,10 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         // Fall back to environment variable
         const envStripeKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
         if (envStripeKey && envStripeKey !== 'your_stripe_publishable_key') {
-          stripePromise = loadStripe(envStripeKey);
-          setStripeKeyLoaded(true);
+          const stripePromise = loadStripe(envStripeKey);
+          setStripeInstance(stripePromise);
         } else {
-          stripePromise = null;
+          setStripeInstance(null);
         }
       }
     };
@@ -201,7 +197,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
       
       // Filter out Stripe payment methods if Stripe is not configured
       const filteredMethods = data?.filter(method => {
-        if (method.type === 'stripe' && !stripePromise) {
+        if (method.type === 'stripe' && !stripeInstance) {
           return false;
         }
         return true;
@@ -235,7 +231,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
       
       // Filter out Stripe payment methods if Stripe is not configured
       const filteredMethods = data?.filter(method => {
-        if (method.type === 'stripe' && !stripePromise) {
+        if (method.type === 'stripe' && !stripeInstance) {
           return false;
         }
         return true;
@@ -354,7 +350,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         throw new Error('Invalid payment method');
       }
       
-      if (selectedMethod.type === 'stripe' && !stripePromise) {
+      if (selectedMethod.type === 'stripe' && !stripeInstance) {
         throw new Error('Stripe is not configured. Please contact support.');
       }
       
@@ -375,7 +371,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         onSuccess();
         onClose();
       } else if (selectedMethod.type === 'stripe') {
-        if (!stripePromise) {
+        if (!stripeInstance) {
           throw new Error('Stripe is not configured. Please contact support.');
         }
         
@@ -847,9 +843,11 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
               </div>
               
               {/* Stripe Payment Form */}
-              {selectedPaymentMethod === paymentMethods.find(m => m.type === 'stripe')?.id && clientSecret && stripePromise && (
+              {selectedPaymentMethod === paymentMethods.find(m => m.type === 'stripe')?.id && 
+               clientSecret && 
+               stripeInstance && (
                 <div className="mt-6">
-                  <Elements stripe={stripePromise} options={{ clientSecret }}>
+                  <Elements stripe={stripeInstance} options={{ clientSecret }}>
                     <StripePaymentForm 
                       amount={formData.budget}
                       transactionId={transactionId || ''}
