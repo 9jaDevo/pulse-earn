@@ -627,5 +627,3 @@ export const {
   isPollPromoted,
   getPromotedPollSettings
 } = PromotedPollService;
-
-export { PromotedPollService }
