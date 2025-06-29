@@ -20,6 +20,7 @@ import { PromotedPollService } from '../../services/promotedPollService';
 import { useToast } from '../../hooks/useToast';
 import { ManageSponsorProfile } from './ManageSponsorProfile';
 import { CreatePromotedPollModal } from './CreatePromotedPollModal';
+import { PromotedPollDetailModal } from '../common/PromotedPollDetailModal';
 import type { Sponsor, PromotedPoll } from '../../types/api';
 
 export const SponsorDashboard: React.FC = () => {
@@ -34,6 +35,10 @@ export const SponsorDashboard: React.FC = () => {
   const [selectedSponsor, setSelectedSponsor] = useState<Sponsor | null>(null);
   const [showCreatePollModal, setShowCreatePollModal] = useState(false);
   const [isModuleEnabled, setIsModuleEnabled] = useState(true);
+  
+  // State for promoted poll detail modal
+  const [selectedPromotedPoll, setSelectedPromotedPoll] = useState<PromotedPoll | null>(null);
+  const [showPromotedPollDetailModal, setShowPromotedPollDetailModal] = useState(false);
   
   useEffect(() => {
     if (user) {
@@ -126,6 +131,56 @@ export const SponsorDashboard: React.FC = () => {
   const handlePromotedPollCreated = () => {
     fetchPromotedPolls();
     successToast('Promoted poll created successfully! It will be reviewed by an admin.');
+  };
+  
+  // Handler for viewing poll details
+  const handleViewDetails = (poll: PromotedPoll) => {
+    console.log('View details for poll:', poll.id);
+    setSelectedPromotedPoll(poll);
+    setShowPromotedPollDetailModal(true);
+  };
+  
+  // Handler for editing a promoted poll
+  const handleEditPromotedPoll = (poll: PromotedPoll) => {
+    console.log('Edit promoted poll:', poll.id);
+    // For now, just show a toast message
+    errorToast('Editing promoted polls will be available in a future update');
+  };
+  
+  // Handler for canceling a promoted poll
+  const handleCancelPromotedPoll = async (poll: PromotedPoll) => {
+    console.log('Cancel promoted poll:', poll.id);
+    
+    if (!user) {
+      errorToast('You must be logged in to cancel a promoted poll');
+      return;
+    }
+    
+    // Confirm with the user
+    if (!confirm('Are you sure you want to cancel this promoted poll? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      const { error } = await PromotedPollService.updatePromotedPoll(
+        user.id,
+        poll.id,
+        { 
+          status: 'rejected',
+          admin_notes: 'Cancelled by sponsor'
+        }
+      );
+      
+      if (error) {
+        errorToast(error);
+        return;
+      }
+      
+      successToast('Promoted poll cancelled successfully');
+      fetchPromotedPolls();
+    } catch (err) {
+      errorToast('Failed to cancel promoted poll');
+    }
   };
   
   const getStatusBadgeColor = (status: string) => {
@@ -323,6 +378,7 @@ export const SponsorDashboard: React.FC = () => {
                         </div>
                         <div className="flex space-x-2 mt-2 md:mt-0">
                           <button
+                            onClick={() => handleViewDetails(poll)}
                             className="p-2 text-primary-600 hover:text-primary-800 rounded-full hover:bg-primary-50"
                             title="View Details"
                           >
@@ -330,6 +386,7 @@ export const SponsorDashboard: React.FC = () => {
                           </button>
                           {poll.status === 'pending_approval' && (
                             <button
+                              onClick={() => handleEditPromotedPoll(poll)}
                               className="p-2 text-gray-600 hover:text-gray-800 rounded-full hover:bg-gray-50"
                               title="Edit"
                             >
@@ -338,6 +395,7 @@ export const SponsorDashboard: React.FC = () => {
                           )}
                           {poll.status === 'pending_approval' && (
                             <button
+                              onClick={() => handleCancelPromotedPoll(poll)}
                               className="p-2 text-error-600 hover:text-error-800 rounded-full hover:bg-error-50"
                               title="Cancel"
                             >
@@ -449,6 +507,15 @@ export const SponsorDashboard: React.FC = () => {
           onClose={() => setShowCreatePollModal(false)}
           onSuccess={handlePromotedPollCreated}
           sponsorId={selectedSponsor.id}
+        />
+      )}
+      
+      {/* Promoted Poll Detail Modal */}
+      {showPromotedPollDetailModal && selectedPromotedPoll && (
+        <PromotedPollDetailModal
+          poll={selectedPromotedPoll}
+          userRole={user?.role || 'user'}
+          onClose={() => setShowPromotedPollDetailModal(false)}
         />
       )}
     </div>
