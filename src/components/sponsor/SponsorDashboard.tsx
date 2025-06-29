@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BarChart3, 
+  BarChart, 
   DollarSign, 
   Users, 
   Clock, 
@@ -12,7 +12,8 @@ import {
   XCircle,
   Eye,
   Edit,
-  Trash2
+  Trash2,
+  CreditCard
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SponsorService } from '../../services/sponsorService';
@@ -22,6 +23,7 @@ import { ManageSponsorProfile } from './ManageSponsorProfile';
 import { CreatePromotedPollModal } from './CreatePromotedPollModal';
 import { PromotedPollDetailModal } from '../common/PromotedPollDetailModal';
 import { EditPromotedPollModal } from './EditPromotedPollModal';
+import { RetryPaymentModal } from './RetryPaymentModal';
 import type { Sponsor, PromotedPoll } from '../../types/api';
 
 export const SponsorDashboard: React.FC = () => {
@@ -44,6 +46,10 @@ export const SponsorDashboard: React.FC = () => {
   // State for edit promoted poll modal
   const [showEditPollModal, setShowEditPollModal] = useState(false);
   const [editingPromotedPoll, setEditingPromotedPoll] = useState<PromotedPoll | null>(null);
+  
+  // State for retry payment modal
+  const [showRetryPaymentModal, setShowRetryPaymentModal] = useState(false);
+  const [retryingPaymentPoll, setRetryingPaymentPoll] = useState<PromotedPoll | null>(null);
   
   useEffect(() => {
     if (user) {
@@ -140,14 +146,12 @@ export const SponsorDashboard: React.FC = () => {
   
   // Handler for viewing poll details
   const handleViewDetails = (poll: PromotedPoll) => {
-    console.log('View details for poll:', poll.id);
     setSelectedPromotedPoll(poll);
     setShowPromotedPollDetailModal(true);
   };
   
   // Handler for editing a promoted poll
   const handleEditPromotedPoll = (poll: PromotedPoll) => {
-    console.log('Edit promoted poll:', poll.id);
     setEditingPromotedPoll(poll);
     setShowEditPollModal(true);
   };
@@ -164,8 +168,6 @@ export const SponsorDashboard: React.FC = () => {
   
   // Handler for canceling a promoted poll
   const handleCancelPromotedPoll = async (poll: PromotedPoll) => {
-    console.log('Cancel promoted poll:', poll.id);
-    
     if (!user) {
       errorToast('You must be logged in to cancel a promoted poll');
       return;
@@ -196,6 +198,52 @@ export const SponsorDashboard: React.FC = () => {
     } catch (err) {
       errorToast('Failed to cancel promoted poll');
     }
+  };
+  
+  // Handler for pausing/resuming a promoted poll
+  const handlePauseResume = async (poll: PromotedPoll) => {
+    if (!user) return;
+    
+    try {
+      if (poll.status === 'active') {
+        const { error } = await PromotedPollService.pausePromotedPoll(user.id, poll.id);
+        
+        if (error) {
+          errorToast(error);
+          return;
+        }
+        
+        successToast('Campaign paused successfully');
+      } else if (poll.status === 'paused') {
+        const { error } = await PromotedPollService.resumePromotedPoll(user.id, poll.id);
+        
+        if (error) {
+          errorToast(error);
+          return;
+        }
+        
+        successToast('Campaign resumed successfully');
+      }
+      
+      // Refresh the list
+      fetchPromotedPolls();
+      
+      // Update selected poll if it's open
+      if (selectedPromotedPoll && selectedPromotedPoll.id === poll.id) {
+        setSelectedPromotedPoll({
+          ...selectedPromotedPoll,
+          status: poll.status === 'active' ? 'paused' : 'active'
+        });
+      }
+    } catch (err) {
+      errorToast('Failed to update campaign status');
+    }
+  };
+  
+  // Handler for retrying payment
+  const handleRetryPayment = (poll: PromotedPoll) => {
+    setRetryingPaymentPoll(poll);
+    setShowRetryPaymentModal(true);
   };
   
   const getStatusBadgeColor = (status: string) => {
@@ -313,7 +361,7 @@ export const SponsorDashboard: React.FC = () => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            <BarChart3 className="h-4 w-4" />
+            <BarChart className="h-4 w-4" />
             <span>Promoted Polls</span>
           </button>
         </nav>
@@ -367,7 +415,7 @@ export const SponsorDashboard: React.FC = () => {
                 </div>
               ) : promotedPolls.length === 0 ? (
                 <div className="text-center py-12 bg-gray-50 rounded-lg">
-                  <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <BarChart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No Promoted Polls</h3>
                   <p className="text-gray-600 mb-4">
                     You haven't promoted any polls yet. Click the button above to get started.
@@ -415,6 +463,15 @@ export const SponsorDashboard: React.FC = () => {
                               title="Cancel"
                             >
                               <Trash2 className="h-5 w-5" />
+                            </button>
+                          )}
+                          {(poll.payment_status === 'failed' || poll.payment_status === 'pending') && (
+                            <button
+                              onClick={() => handleRetryPayment(poll)}
+                              className="p-2 text-primary-600 hover:text-primary-800 rounded-full hover:bg-primary-50"
+                              title="Retry Payment"
+                            >
+                              <CreditCard className="h-5 w-5" />
                             </button>
                           )}
                         </div>
@@ -506,6 +563,29 @@ export const SponsorDashboard: React.FC = () => {
                           </div>
                         </div>
                       )}
+                      
+                      {/* Payment Status Message */}
+                      {(poll.payment_status === 'failed' || poll.payment_status === 'pending') && (
+                        <div className="bg-error-50 border border-error-200 rounded-lg p-3 flex items-start space-x-2 mt-4">
+                          <AlertCircle className="h-5 w-5 text-error-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-error-800 text-sm font-medium">
+                              Payment {poll.payment_status === 'failed' ? 'Failed' : 'Pending'}
+                            </p>
+                            <p className="text-error-700 text-xs">
+                              {poll.payment_status === 'failed' 
+                                ? 'Your payment was not successful. Please retry the payment to activate your campaign.' 
+                                : 'Your payment is pending. Please complete the payment to activate your campaign.'}
+                            </p>
+                            <button
+                              onClick={() => handleRetryPayment(poll)}
+                              className="mt-2 bg-primary-600 text-white px-3 py-1 rounded text-xs font-medium hover:bg-primary-700 transition-colors"
+                            >
+                              Retry Payment
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -531,6 +611,14 @@ export const SponsorDashboard: React.FC = () => {
           poll={selectedPromotedPoll}
           userRole={user?.role || 'user'}
           onClose={() => setShowPromotedPollDetailModal(false)}
+          onPauseResume={async () => {
+            await handlePauseResume(selectedPromotedPoll);
+          }}
+          onRetryPayment={
+            (selectedPromotedPoll.payment_status === 'failed' || selectedPromotedPoll.payment_status === 'pending')
+              ? () => handleRetryPayment(selectedPromotedPoll)
+              : undefined
+          }
         />
       )}
       
@@ -542,8 +630,29 @@ export const SponsorDashboard: React.FC = () => {
             setShowEditPollModal(false);
             setEditingPromotedPoll(null);
           }}
-          onSuccess={handlePromotedPollUpdated}
-          promotedPoll={editingPromotedPoll}
+          onSave={() => {
+            fetchPromotedPolls();
+            setShowEditPollModal(false);
+            setEditingPromotedPoll(null);
+          }}
+          promotedPollId={editingPromotedPoll.id}
+        />
+      )}
+      
+      {/* Retry Payment Modal */}
+      {showRetryPaymentModal && retryingPaymentPoll && (
+        <RetryPaymentModal
+          isOpen={showRetryPaymentModal}
+          onClose={() => {
+            setShowRetryPaymentModal(false);
+            setRetryingPaymentPoll(null);
+          }}
+          onSuccess={() => {
+            fetchPromotedPolls();
+            setShowRetryPaymentModal(false);
+            setRetryingPaymentPoll(null);
+          }}
+          promotedPoll={retryingPaymentPoll}
         />
       )}
     </div>

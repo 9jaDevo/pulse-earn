@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BarChart3, 
+  BarChart, 
   DollarSign, 
   Plus, 
   Search, 
@@ -12,12 +12,13 @@ import {
   Pause,
   CheckCircle,
   XCircle,
-  AlertTriangle,
+  AlertCircle,
   Clock,
   Target,
   TrendingUp,
   Calendar,
-  RefreshCw
+  RefreshCw,
+  CreditCard
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PromotedPollService } from '../../services/promotedPollService';
@@ -43,6 +44,7 @@ export const PromotedPollsManagement: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [selectedPollId, setSelectedPollId] = useState<string | null>(null);
+  const [retryingPayment, setRetryingPayment] = useState<string | null>(null);
   
   // Fetch promoted polls
   useEffect(() => {
@@ -114,6 +116,56 @@ export const PromotedPollsManagement: React.FC = () => {
       console.error(err);
     }
   };
+
+  const handleRetryPayment = async (promotedPollId: string, paymentMethod: string = 'stripe') => {
+    if (!user) return;
+    
+    setRetryingPayment(promotedPollId);
+    
+    try {
+      const { data, error } = await PromotedPollService.retryPromotedPollPayment(
+        user.id,
+        promotedPollId,
+        paymentMethod
+      );
+      
+      if (error) {
+        errorToast(error);
+        return;
+      }
+      
+      if (!data) {
+        errorToast('Failed to initialize payment');
+        return;
+      }
+      
+      // Handle different payment methods
+      if (data.authorizationUrl) {
+        // For Paystack, redirect to the payment page
+        window.location.href = data.authorizationUrl;
+      } else if (data.clientSecret) {
+        // For Stripe, open the payment modal
+        // This would typically open a modal with the Stripe Elements
+        // For now, we'll just show a success message
+        successToast('Payment initialized. Please complete the payment in the modal.');
+        
+        // In a real implementation, you would open a modal with Stripe Elements
+        // For example:
+        // setStripeClientSecret(data.clientSecret);
+        // setStripeTransactionId(data.transactionId);
+        // setShowStripeModal(true);
+      } else {
+        // For wallet payments or other methods that complete immediately
+        successToast('Payment processed successfully!');
+        fetchPromotedPolls();
+      }
+    } catch (err) {
+      errorToast('Failed to retry payment');
+      console.error(err);
+    } finally {
+      setRetryingPayment(null);
+    }
+  };
   
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -134,10 +186,10 @@ export const PromotedPollsManagement: React.FC = () => {
   
   const getPaymentStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'paid':
-        return 'bg-success-100 text-success-700';
       case 'pending':
         return 'bg-warning-100 text-warning-700';
+      case 'paid':
+        return 'bg-success-100 text-success-700';
       case 'failed':
         return 'bg-error-100 text-error-700';
       case 'refunded':
@@ -150,7 +202,10 @@ export const PromotedPollsManagement: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold text-gray-900">Promoted Polls</h2>
+        <h2 className="text-xl font-bold text-gray-900 flex items-center">
+          <BarChart className="h-6 w-6 mr-3 text-primary-600" />
+          Promoted Polls
+        </h2>
         <button
           onClick={() => setShowCreateModal(true)}
           className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors flex items-center space-x-2"
@@ -201,7 +256,7 @@ export const PromotedPollsManagement: React.FC = () => {
       {/* Empty State */}
       {!loading && promotedPolls.length === 0 && (
         <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-200">
-          <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <BarChart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No promoted polls found</h3>
           <p className="text-gray-600 mb-6">
             {statusFilter !== 'all' 
@@ -239,60 +294,70 @@ export const PromotedPollsManagement: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Payment
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created
+                  </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {promotedPolls.map((promotedPoll) => (
-                  <tr key={promotedPoll.id} className="hover:bg-gray-50">
+                {promotedPolls.map((poll) => (
+                  <tr key={poll.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {promotedPoll.poll?.title || 'Unknown Poll'}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            Created: {new Date(promotedPoll.created_at).toLocaleDateString()}
-                          </div>
-                        </div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {poll.poll?.title || 'Unknown Poll'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(promotedPoll.status)}`}>
-                        {promotedPoll.status.replace('_', ' ')}
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(poll.status)}`}>
+                        {poll.status.replace('_', ' ')}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">${promotedPoll.budget_amount.toFixed(2)}</div>
-                      <div className="text-xs text-gray-500">${promotedPoll.cost_per_vote.toFixed(2)} per vote</div>
+                      <div className="text-sm text-gray-900">${poll.budget_amount.toFixed(2)}</div>
+                      <div className="text-xs text-gray-500">${poll.cost_per_vote.toFixed(2)} per vote</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-1 mr-4">
                           <div className="text-sm text-gray-900 mb-1">
-                            {promotedPoll.current_votes} / {promotedPoll.target_votes} votes
+                            {poll.current_votes} / {poll.target_votes} votes
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div 
                               className="bg-primary-600 h-2 rounded-full" 
-                              style={{ width: `${Math.min((promotedPoll.current_votes / promotedPoll.target_votes) * 100, 100)}%` }}
+                              style={{ width: `${Math.min((poll.current_votes / poll.target_votes) * 100, 100)}%` }}
                             ></div>
                           </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getPaymentStatusBadgeColor(promotedPoll.payment_status)}`}>
-                        {promotedPoll.payment_status}
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getPaymentStatusBadgeColor(poll.payment_status)}`}>
+                        {poll.payment_status}
                       </span>
+                      
+                      {/* Retry Payment Button */}
+                      {(poll.payment_status === 'failed' || poll.payment_status === 'pending') && (
+                        <button
+                          onClick={() => handleRetryPayment(poll.id)}
+                          disabled={retryingPayment === poll.id}
+                          className="ml-2 text-primary-600 hover:text-primary-800 text-xs font-medium"
+                        >
+                          {retryingPayment === poll.id ? 'Processing...' : 'Retry Payment'}
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(poll.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
+                      <div className="flex items-center justify-end space-x-2">
                         <button
                           onClick={() => {
-                            setSelectedPollId(promotedPoll.id);
+                            setSelectedPollId(poll.id);
                             setShowAnalyticsModal(true);
                           }}
                           className="text-primary-600 hover:text-primary-900"
@@ -301,10 +366,10 @@ export const PromotedPollsManagement: React.FC = () => {
                           <TrendingUp className="h-5 w-5" />
                         </button>
                         
-                        {(promotedPoll.status === 'pending_approval' || promotedPoll.status === 'paused') && (
+                        {(poll.status === 'pending_approval' || poll.status === 'paused') && (
                           <button
                             onClick={() => {
-                              setSelectedPollId(promotedPoll.id);
+                              setSelectedPollId(poll.id);
                               setShowEditModal(true);
                             }}
                             className="text-gray-600 hover:text-gray-900"
@@ -314,9 +379,9 @@ export const PromotedPollsManagement: React.FC = () => {
                           </button>
                         )}
                         
-                        {promotedPoll.status === 'active' && (
+                        {poll.status === 'active' && (
                           <button
-                            onClick={() => handlePauseResume(promotedPoll.id, promotedPoll.status)}
+                            onClick={() => handlePauseResume(poll.id, poll.status)}
                             className="text-warning-600 hover:text-warning-900"
                             title="Pause Campaign"
                           >
@@ -324,13 +389,25 @@ export const PromotedPollsManagement: React.FC = () => {
                           </button>
                         )}
                         
-                        {promotedPoll.status === 'paused' && (
+                        {poll.status === 'paused' && (
                           <button
-                            onClick={() => handlePauseResume(promotedPoll.id, promotedPoll.status)}
+                            onClick={() => handlePauseResume(poll.id, poll.status)}
                             className="text-success-600 hover:text-success-900"
                             title="Resume Campaign"
                           >
                             <Play className="h-5 w-5" />
+                          </button>
+                        )}
+                        
+                        {/* Payment Retry Button for Failed/Pending Payments */}
+                        {(poll.payment_status === 'failed' || poll.payment_status === 'pending') && (
+                          <button
+                            onClick={() => handleRetryPayment(poll.id)}
+                            disabled={retryingPayment === poll.id}
+                            className="text-primary-600 hover:text-primary-900"
+                            title="Retry Payment"
+                          >
+                            <CreditCard className="h-5 w-5" />
                           </button>
                         )}
                       </div>
@@ -346,7 +423,9 @@ export const PromotedPollsManagement: React.FC = () => {
             currentPage={currentPage}
             totalItems={totalCount}
             itemsPerPage={itemsPerPage}
-            onPageChange={setCurrentPage}
+            onPageChange={(page) => {
+              setCurrentPage(page);
+            }}
           />
         </div>
       )}
@@ -356,7 +435,7 @@ export const PromotedPollsManagement: React.FC = () => {
         <CreatePromotedPollModal
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
-          onSave={() => {
+          onSuccess={() => {
             fetchPromotedPolls();
             setShowCreateModal(false);
           }}

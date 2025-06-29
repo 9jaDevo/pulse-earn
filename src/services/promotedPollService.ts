@@ -704,6 +704,150 @@ export class PromotedPollService {
   }
 
   /**
+   * Retry payment for a promoted poll with failed or pending payment status
+   */
+  static async retryPromotedPollPayment(
+    userId: string,
+    promotedPollId: string,
+    paymentMethod: string
+  ): Promise<ServiceResponse<{
+    clientSecret?: string;
+    authorizationUrl?: string;
+    transactionId: string;
+  }>> {
+    try {
+      // First check if the user has permission to retry payment for this promoted poll
+      const { data: promotedPoll, error: fetchError } = await supabase
+        .from('promoted_polls')
+        .select(`
+          *,
+          sponsor:sponsor_id(user_id)
+        `)
+        .eq('id', promotedPollId)
+        .maybeSingle();
+
+      if (fetchError) {
+        return { data: null, error: fetchError.message };
+      }
+
+      if (!promotedPoll) {
+        return { data: null, error: 'Promoted poll not found' };
+      }
+
+      // Check if user is the sponsor owner
+      const isOwner = promotedPoll.sponsor?.user_id === userId;
+
+      if (!isOwner) {
+        return { data: null, error: 'You do not have permission to retry payment for this promoted poll' };
+      }
+
+      // Check if payment status is failed or pending
+      if (promotedPoll.payment_status !== 'failed' && promotedPoll.payment_status !== 'pending') {
+        return { data: null, error: 'Only failed or pending payments can be retried' };
+      }
+
+      // Create a new transaction record
+      const { data: transaction, error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: userId,
+          promoted_poll_id: promotedPollId,
+          amount: promotedPoll.budget_amount,
+          currency: 'USD',
+          payment_method: paymentMethod,
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (transactionError) {
+        return { data: null, error: transactionError.message };
+      }
+
+      // Based on the payment method, initialize the appropriate payment gateway
+      if (paymentMethod === 'stripe') {
+        // Import the payment service dynamically to avoid circular dependencies
+        const { PaymentService } = await import('./paymentService');
+        
+        const { data: stripeData, error: stripeError } = await PaymentService.initializeStripePayment(
+          userId,
+          promotedPoll.budget_amount,
+          promotedPollId
+        );
+        
+        if (stripeError) {
+          return { data: null, error: stripeError };
+        }
+        
+        return { 
+          data: {
+            clientSecret: stripeData?.clientSecret,
+            transactionId: stripeData?.transactionId || transaction.id
+          }, 
+          error: null 
+        };
+      } else if (paymentMethod === 'paystack') {
+        // Import the payment service dynamically to avoid circular dependencies
+        const { PaymentService } = await import('./paymentService');
+        
+        const { data: paystackData, error: paystackError } = await PaymentService.initializePaystackPayment(
+          userId,
+          promotedPoll.budget_amount,
+          promotedPollId
+        );
+        
+        if (paystackError) {
+          return { data: null, error: paystackError };
+        }
+        
+        return { 
+          data: {
+            authorizationUrl: paystackData?.authorizationUrl,
+            transactionId: transaction.id
+          }, 
+          error: null 
+        };
+      } else if (paymentMethod === 'wallet') {
+        // Import the payment service dynamically to avoid circular dependencies
+        const { PaymentService } = await import('./paymentService');
+        
+        const { data: walletData, error: walletError } = await PaymentService.processWalletPayment(
+          userId,
+          promotedPoll.budget_amount,
+          promotedPollId
+        );
+        
+        if (walletError) {
+          return { data: null, error: walletError };
+        }
+        
+        // Update the promoted poll payment status
+        await supabase
+          .from('promoted_polls')
+          .update({
+            payment_status: 'paid',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', promotedPollId);
+        
+        return { 
+          data: {
+            transactionId: transaction.id
+          }, 
+          error: null 
+        };
+      } else {
+        return { data: null, error: 'Unsupported payment method' };
+      }
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to retry payment'
+      };
+    }
+  }
+
+  /**
    * Get promoted poll analytics
    */
   static async getPromotedPollAnalytics(
@@ -820,13 +964,14 @@ export class PromotedPollService {
       limit?: number;
       offset?: number;
       status?: 'pending_approval' | 'active' | 'paused' | 'completed' | 'rejected';
+      includeDetails?: boolean;
     } = {}
   ): Promise<ServiceResponse<{
     promotedPolls: PromotedPoll[];
     totalCount: number;
   }>> {
     try {
-      const { limit = 10, offset = 0, status } = options;
+      const { limit = 10, offset = 0, status, includeDetails = false } = options;
 
       // Get all sponsors owned by the user
       const { data: sponsors, error: sponsorsError } = await supabase
@@ -855,8 +1000,10 @@ export class PromotedPollService {
         .from('promoted_polls')
         .select(`
           *,
+          ${includeDetails ? `
           poll:poll_id(*),
           sponsor:sponsor_id(*)
+          ` : ''}
         `, { count: 'exact' })
         .in('sponsor_id', sponsorIds)
         .order('created_at', { ascending: false })
@@ -997,6 +1144,218 @@ export class PromotedPollService {
       };
     }
   }
+
+  /**
+   * Get promoted poll settings
+   */
+  static async getPromotedPollSettings(): Promise<ServiceResponse<{
+    default_cost_per_vote: number;
+    minimum_budget: number;
+    maximum_budget: number;
+    points_to_usd_conversion: number;
+    is_enabled: boolean;
+  }>> {
+    try {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('settings')
+        .eq('category', 'promoted_polls')
+        .maybeSingle();
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      // Default settings if none found
+      const defaultSettings = {
+        default_cost_per_vote: 0.05,
+        minimum_budget: 10,
+        maximum_budget: 1000,
+        points_to_usd_conversion: 100,
+        is_enabled: true
+      };
+
+      return { 
+        data: data?.settings || defaultSettings, 
+        error: null 
+      };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get promoted poll settings'
+      };
+    }
+  }
+
+  /**
+   * Update promoted poll status
+   */
+  static async updatePromotedPollStatus(
+    userId: string,
+    promotedPollId: string,
+    status: 'active' | 'paused' | 'completed' | 'rejected',
+    notes?: string
+  ): Promise<ServiceResponse<PromotedPoll>> {
+    try {
+      // Check if user is admin
+      const { data: userProfile } = await ProfileService.fetchProfileById(userId);
+      const isAdmin = userProfile?.role === 'admin';
+
+      if (!isAdmin) {
+        // Check if user owns the sponsor
+        const { data: promotedPoll, error: fetchError } = await supabase
+          .from('promoted_polls')
+          .select(`
+            *,
+            sponsor:sponsor_id(user_id)
+          `)
+          .eq('id', promotedPollId)
+          .maybeSingle();
+
+        if (fetchError) {
+          return { data: null, error: fetchError.message };
+        }
+
+        if (!promotedPoll) {
+          return { data: null, error: 'Promoted poll not found' };
+        }
+
+        const isOwner = promotedPoll.sponsor?.user_id === userId;
+
+        if (!isOwner) {
+          return { data: null, error: 'You do not have permission to update this promoted poll' };
+        }
+
+        // Non-admins can only pause or resume their own polls
+        if (status !== 'paused' && status !== 'active') {
+          return { data: null, error: 'You can only pause or resume your own polls' };
+        }
+
+        // Check if the current status allows the requested transition
+        if (status === 'paused' && promotedPoll.status !== 'active') {
+          return { data: null, error: 'Only active polls can be paused' };
+        }
+
+        if (status === 'active' && promotedPoll.status !== 'paused') {
+          return { data: null, error: 'Only paused polls can be resumed' };
+        }
+      }
+
+      // Prepare updates
+      const updateData: Record<string, any> = {
+        status,
+        updated_at: new Date().toISOString()
+      };
+
+      if (notes) {
+        updateData.admin_notes = notes;
+      }
+
+      // If status is active and it's an admin, set approved_by and approved_at
+      if (status === 'active' && isAdmin) {
+        updateData.approved_by = userId;
+        updateData.approved_at = new Date().toISOString();
+      }
+
+      // Update the promoted poll
+      const { data, error } = await supabase
+        .from('promoted_polls')
+        .update(updateData)
+        .eq('id', promotedPollId)
+        .select(`
+          *,
+          poll:poll_id(*),
+          sponsor:sponsor_id(*),
+          approver:approved_by(name, email)
+        `)
+        .single();
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to update promoted poll status'
+      };
+    }
+  }
+
+  /**
+   * Get all promoted polls (admin only)
+   */
+  static async getAllPromotedPolls(
+    adminId: string,
+    options: {
+      limit?: number;
+      offset?: number;
+      status?: 'pending_approval' | 'active' | 'paused' | 'completed' | 'rejected';
+      payment_status?: 'pending' | 'paid' | 'failed' | 'refunded';
+      includeDetails?: boolean;
+    } = {}
+  ): Promise<ServiceResponse<{
+    promotedPolls: PromotedPoll[];
+    totalCount: number;
+  }>> {
+    try {
+      // Check if user is admin
+      const { data: adminProfile, error: adminError } = await ProfileService.fetchProfileById(adminId);
+      
+      if (adminError || !adminProfile || adminProfile.role !== 'admin') {
+        return { data: null, error: 'Unauthorized: Only admins can view all promoted polls' };
+      }
+
+      const { 
+        limit = 10, 
+        offset = 0, 
+        status, 
+        payment_status,
+        includeDetails = false
+      } = options;
+
+      let query = supabase
+        .from('promoted_polls')
+        .select(`
+          *,
+          ${includeDetails ? `
+          poll:poll_id(*),
+          sponsor:sponsor_id(*),
+          approver:approved_by(name, email)
+          ` : ''}
+        `, { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      if (payment_status) {
+        query = query.eq('payment_status', payment_status);
+      }
+
+      const { data, error, count } = await query;
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      return { 
+        data: { 
+          promotedPolls: data || [], 
+          totalCount: count || 0 
+        }, 
+        error: null 
+      };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get all promoted polls'
+      };
+    }
+  }
 }
 
 // Export individual functions for backward compatibility and easier testing
@@ -1010,8 +1369,12 @@ export const {
   pausePromotedPoll,
   resumePromotedPoll,
   processPayment,
+  retryPromotedPollPayment,
   getPromotedPollAnalytics,
   getUserPromotedPolls,
   getActivePromotedPolls,
-  recordPromotedPollVote
+  recordPromotedPollVote,
+  getPromotedPollSettings,
+  updatePromotedPollStatus,
+  getAllPromotedPolls
 } = PromotedPollService;

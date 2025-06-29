@@ -8,7 +8,8 @@ import {
   XCircle, 
   PauseCircle, 
   PlayCircle, 
-  X
+  X,
+  CreditCard
 } from 'lucide-react';
 import type { PromotedPoll } from '../../types/api';
 
@@ -18,6 +19,7 @@ interface PromotedPollDetailModalProps {
   onApprove?: () => Promise<void>;
   onReject?: (notes: string) => Promise<void>;
   onPauseResume?: () => Promise<void>;
+  onRetryPayment?: () => Promise<void>;
   userRole?: string;
 }
 
@@ -27,6 +29,7 @@ export const PromotedPollDetailModal: React.FC<PromotedPollDetailModalProps> = (
   onApprove,
   onReject,
   onPauseResume,
+  onRetryPayment,
   userRole = 'user'
 }) => {
   const [adminNotes, setAdminNotes] = useState(poll.admin_notes || '');
@@ -60,6 +63,14 @@ export const PromotedPollDetailModal: React.FC<PromotedPollDetailModalProps> = (
     
     setLoading(true);
     await onPauseResume();
+    setLoading(false);
+  };
+  
+  const handleRetryPayment = async () => {
+    if (!onRetryPayment) return;
+    
+    setLoading(true);
+    await onRetryPayment();
     setLoading(false);
   };
   
@@ -112,6 +123,17 @@ export const PromotedPollDetailModal: React.FC<PromotedPollDetailModalProps> = (
               }`}>
                 {poll.payment_status}
               </span>
+              
+              {/* Retry Payment Button */}
+              {(poll.payment_status === 'failed' || poll.payment_status === 'pending') && onRetryPayment && (
+                <button
+                  onClick={handleRetryPayment}
+                  disabled={loading}
+                  className="ml-2 text-primary-600 hover:text-primary-800 text-xs font-medium"
+                >
+                  Retry Payment
+                </button>
+              )}
             </div>
           </div>
           <div>
@@ -236,6 +258,18 @@ export const PromotedPollDetailModal: React.FC<PromotedPollDetailModalProps> = (
                   <span>Resume</span>
                 </>
               )}
+            </button>
+          )}
+          
+          {/* Retry Payment Button */}
+          {(poll.payment_status === 'failed' || poll.payment_status === 'pending') && onRetryPayment && (
+            <button
+              onClick={handleRetryPayment}
+              disabled={loading}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+            >
+              <CreditCard className="h-5 w-5" />
+              <span>Retry Payment</span>
             </button>
           )}
         </div>
