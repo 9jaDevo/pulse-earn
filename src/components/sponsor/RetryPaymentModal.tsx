@@ -21,11 +21,8 @@ import type { PromotedPoll, PaymentMethod } from '../../types/api';
 import getSymbolFromCurrency from 'currency-symbol-map';
 
 // Initialize Stripe outside of component to avoid re-initialization
-// Only initialize if we have a valid Stripe key
-const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-const stripePromise = stripePublicKey && stripePublicKey !== 'your_stripe_publishable_key' 
-  ? loadStripe(stripePublicKey) 
-  : null;
+// We'll set this dynamically once we fetch the key from settings
+let stripePromise: ReturnType<typeof loadStripe> | null = null;
 
 interface RetryPaymentModalProps {
   isOpen: boolean;
@@ -48,6 +45,7 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
   const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>(['USD']);
   const [loadingCurrencies, setLoadingCurrencies] = useState(true);
+  const [stripeKeyLoaded, setStripeKeyLoaded] = useState(false);
   
   // Stripe payment state
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -56,6 +54,48 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
   // Get the poll currency or default to USD
   const pollCurrency = promotedPoll.currency || 'USD';
   const currencySymbol = getSymbolFromCurrency(pollCurrency) || '$';
+  
+  // Load Stripe key from settings
+  useEffect(() => {
+    const loadStripeKey = async () => {
+      try {
+        // Get Stripe key from settings
+        const { data: integrationSettings } = await SettingsService.getSettings('integrations');
+        
+        if (integrationSettings?.stripePublicKey && 
+            integrationSettings.stripePublicKey !== 'your_stripe_publishable_key') {
+          // Initialize Stripe with the key from settings
+          stripePromise = loadStripe(integrationSettings.stripePublicKey);
+          setStripeKeyLoaded(true);
+        } else {
+          // Fall back to environment variable
+          const envStripeKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+          if (envStripeKey && envStripeKey !== 'your_stripe_publishable_key') {
+            stripePromise = loadStripe(envStripeKey);
+            setStripeKeyLoaded(true);
+          } else {
+            console.warn('No valid Stripe public key found in settings or environment variables');
+            stripePromise = null;
+          }
+        }
+      } catch (err) {
+        console.error('Error loading Stripe key from settings:', err);
+        
+        // Fall back to environment variable
+        const envStripeKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+        if (envStripeKey && envStripeKey !== 'your_stripe_publishable_key') {
+          stripePromise = loadStripe(envStripeKey);
+          setStripeKeyLoaded(true);
+        } else {
+          stripePromise = null;
+        }
+      }
+    };
+    
+    if (isOpen) {
+      loadStripeKey();
+    }
+  }, [isOpen]);
   
   useEffect(() => {
     // Fetch available payment methods for the poll's currency
@@ -110,11 +150,11 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
       }
     };
     
-    if (isOpen) {
+    if (isOpen && stripeKeyLoaded) {
       fetchPaymentMethods();
       fetchCurrencies();
     }
-  }, [isOpen, profile, pollCurrency]);
+  }, [isOpen, profile, pollCurrency, stripeKeyLoaded]);
 
   const handleRetryPayment = async () => {
     if (!user) {

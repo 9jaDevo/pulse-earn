@@ -25,11 +25,8 @@ import type { Poll, PaymentMethod } from '../../types/api';
 import getSymbolFromCurrency from 'currency-symbol-map';
 
 // Initialize Stripe outside of component to avoid re-initialization
-// Only initialize if we have a valid Stripe key
-const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-const stripePromise = stripePublicKey && stripePublicKey !== 'your_stripe_publishable_key' 
-  ? loadStripe(stripePublicKey) 
-  : null;
+// We'll set this dynamically once we fetch the key from settings
+let stripePromise: ReturnType<typeof loadStripe> | null = null;
 
 interface CreatePromotedPollModalProps {
   isOpen: boolean;
@@ -56,6 +53,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
   const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>(['USD']);
   const [loadingCurrencies, setLoadingCurrencies] = useState(true);
+  const [stripeKeyLoaded, setStripeKeyLoaded] = useState(false);
   
   // Stripe payment state
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -82,6 +80,46 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
     endDate: '',
     currency: 'USD'
   });
+  
+  // Load Stripe key from settings
+  useEffect(() => {
+    const loadStripeKey = async () => {
+      try {
+        // Get Stripe key from settings
+        const { data: integrationSettings } = await SettingsService.getSettings('integrations');
+        
+        if (integrationSettings?.stripePublicKey && 
+            integrationSettings.stripePublicKey !== 'your_stripe_publishable_key') {
+          // Initialize Stripe with the key from settings
+          stripePromise = loadStripe(integrationSettings.stripePublicKey);
+          setStripeKeyLoaded(true);
+        } else {
+          // Fall back to environment variable
+          const envStripeKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+          if (envStripeKey && envStripeKey !== 'your_stripe_publishable_key') {
+            stripePromise = loadStripe(envStripeKey);
+            setStripeKeyLoaded(true);
+          } else {
+            console.warn('No valid Stripe public key found in settings or environment variables');
+            stripePromise = null;
+          }
+        }
+      } catch (err) {
+        console.error('Error loading Stripe key from settings:', err);
+        
+        // Fall back to environment variable
+        const envStripeKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+        if (envStripeKey && envStripeKey !== 'your_stripe_publishable_key') {
+          stripePromise = loadStripe(envStripeKey);
+          setStripeKeyLoaded(true);
+        } else {
+          stripePromise = null;
+        }
+      }
+    };
+    
+    loadStripeKey();
+  }, []);
   
   // Load user's polls and payment methods
   useEffect(() => {
@@ -314,6 +352,10 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
       
       if (!selectedMethod) {
         throw new Error('Invalid payment method');
+      }
+      
+      if (selectedMethod.type === 'stripe' && !stripePromise) {
+        throw new Error('Stripe is not configured. Please contact support.');
       }
       
       if (selectedMethod.type === 'wallet') {
@@ -803,78 +845,78 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                   </div>
                 ))}
               </div>
+              
+              {/* Stripe Payment Form */}
+              {selectedPaymentMethod === paymentMethods.find(m => m.type === 'stripe')?.id && clientSecret && stripePromise && (
+                <div className="mt-6">
+                  <Elements stripe={stripePromise} options={{ clientSecret }}>
+                    <StripePaymentForm 
+                      amount={formData.budget}
+                      transactionId={transactionId || ''}
+                      onSuccess={handleStripePaymentSuccess}
+                      onError={handleStripePaymentError}
+                      currency={formData.currency}
+                    />
+                  </Elements>
+                </div>
+              )}
+              
+              {/* Payment Summary (only show if not using Stripe or Stripe not initialized) */}
+              {(selectedPaymentMethod !== paymentMethods.find(m => m.type === 'stripe')?.id || !clientSecret) && (
+                <div className="bg-gray-50 p-4 rounded-lg mt-6">
+                  <h4 className="font-medium text-gray-900 mb-3">Payment Summary</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Promotion Budget:</span>
+                      <span className="font-medium">{currencySymbol}{formData.budget.toFixed(2)}</span>
+                    </div>
+                    
+                    {/* If wallet payment, show points conversion */}
+                    {selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Points Required:</span>
+                        <span className="font-medium">
+                          {(formData.budget * settings.points_to_usd_conversion).toLocaleString()} points
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Show currency conversion if applicable */}
+                    {selectedPaymentMethod && formData.currency !== 'USD' && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Currency:</span>
+                        <span className="font-medium">
+                          {formData.currency} ({currencySymbol})
+                        </span>
+                      </div>
+                    )}
+                    
+                    <div className="pt-2 border-t border-gray-200 mt-2">
+                      <div className="flex justify-between">
+                        <span className="text-gray-800 font-medium">Total:</span>
+                        <span className="font-bold text-gray-900">{currencySymbol}{formData.budget.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Insufficient Points Warning */}
+              {selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && 
+               profile && 
+               profile.points < (formData.budget * settings.points_to_usd_conversion) && (
+                <div className="bg-error-50 border border-error-200 rounded-lg p-4 flex items-start space-x-3 mt-4">
+                  <AlertCircle className="h-5 w-5 text-error-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-medium text-error-800 mb-1">Insufficient Points</h3>
+                    <p className="text-error-700 text-sm">
+                      You don't have enough points for this payment. You need {(formData.budget * settings.points_to_usd_conversion).toLocaleString()} points, 
+                      but you only have {profile.points.toLocaleString()} points. Please select a different payment method or reduce your budget.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
-            
-            {/* Stripe Payment Form */}
-            {selectedPaymentMethod === paymentMethods.find(m => m.type === 'stripe')?.id && clientSecret && stripePromise && (
-              <div className="mt-6">
-                <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <StripePaymentForm 
-                    amount={formData.budget}
-                    transactionId={transactionId || ''}
-                    onSuccess={handleStripePaymentSuccess}
-                    onError={handleStripePaymentError}
-                    currency={formData.currency}
-                  />
-                </Elements>
-              </div>
-            )}
-            
-            {/* Payment Summary (only show if not using Stripe or Stripe not initialized) */}
-            {(selectedPaymentMethod !== paymentMethods.find(m => m.type === 'stripe')?.id || !clientSecret) && (
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-3">Payment Summary</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Promotion Budget:</span>
-                    <span className="font-medium">{currencySymbol}{formData.budget.toFixed(2)}</span>
-                  </div>
-                  
-                  {/* If wallet payment, show points conversion */}
-                  {selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Points Required:</span>
-                      <span className="font-medium">
-                        {(formData.budget * settings.points_to_usd_conversion).toLocaleString()} points
-                      </span>
-                    </div>
-                  )}
-                  
-                  {/* Show currency conversion if applicable */}
-                  {selectedPaymentMethod && formData.currency !== 'USD' && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Currency:</span>
-                      <span className="font-medium">
-                        {formData.currency} ({currencySymbol})
-                      </span>
-                    </div>
-                  )}
-                  
-                  <div className="pt-2 border-t border-gray-200 mt-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-800 font-medium">Total:</span>
-                      <span className="font-bold text-gray-900">{currencySymbol}{formData.budget.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Insufficient Points Warning */}
-            {selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && 
-             profile && 
-             profile.points < (formData.budget * settings.points_to_usd_conversion) && (
-              <div className="bg-error-50 border border-error-200 rounded-lg p-4 flex items-start space-x-3">
-                <AlertCircle className="h-5 w-5 text-error-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-medium text-error-800 mb-1">Insufficient Points</h3>
-                  <p className="text-error-700 text-sm">
-                    You don't have enough points for this payment. You need {(formData.budget * settings.points_to_usd_conversion).toLocaleString()} points, 
-                    but you only have {profile.points.toLocaleString()} points. Please select a different payment method or reduce your budget.
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
