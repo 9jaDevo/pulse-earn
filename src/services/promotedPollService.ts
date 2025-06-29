@@ -322,6 +322,13 @@ export class PromotedPollService {
     updates: PromotedPollUpdateRequest
   ): Promise<ServiceResponse<PromotedPoll>> {
     try {
+      // First, get the current promoted poll to check its payment status
+      const { data: currentPoll, error: fetchError } = await this.getPromotedPollById(promotedPollId);
+      
+      if (fetchError || !currentPoll) {
+        return { data: null, error: fetchError || 'Promoted poll not found' };
+      }
+      
       // Check if user is admin or owns the sponsor
       const { data: profile } = await ProfileService.fetchProfileById(userId);
       const isAdmin = profile?.role === 'admin';
@@ -348,14 +355,23 @@ export class PromotedPollService {
         if (!count || count === 0) {
           return { data: null, error: 'Unauthorized: You do not own this promoted poll' };
         }
+      }
+      
+      // If the poll has been paid for, prevent updates to financial fields
+      if (currentPoll.payment_status === 'paid') {
+        // Remove financial fields from updates
+        const { budget_amount, target_votes, start_date, end_date, ...allowedUpdates } = updates;
         
-        // Non-admins can only update certain fields
-        const allowedUpdates = ['budget_amount', 'target_votes', 'start_date', 'end_date'];
-        Object.keys(updates).forEach(key => {
-          if (!allowedUpdates.includes(key)) {
-            delete (updates as any)[key];
-          }
-        });
+        // If there are no allowed updates left, return an error
+        if (Object.keys(allowedUpdates).length === 0) {
+          return { 
+            data: null, 
+            error: 'Cannot update budget, target votes, or dates after payment has been processed. Please contact support for assistance.' 
+          };
+        }
+        
+        // Only proceed with the allowed updates
+        updates = allowedUpdates;
       }
       
       // If status is being updated to 'active', set approved_by and approved_at
@@ -611,3 +627,5 @@ export const {
   isPollPromoted,
   getPromotedPollSettings
 } = PromotedPollService;
+
+export { PromotedPollService }

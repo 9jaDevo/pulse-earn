@@ -7,7 +7,8 @@ import {
   Users, 
   Info, 
   RefreshCw,
-  Save
+  Save,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PromotedPollService } from '../../services/promotedPollService';
@@ -50,6 +51,9 @@ export const EditPromotedPollModal: React.FC<EditPromotedPollModalProps> = ({
     endDate: promotedPoll.end_date ? new Date(promotedPoll.end_date).toISOString().split('T')[0] : ''
   });
   
+  // Check if the poll has been paid for
+  const isPaid = promotedPoll.payment_status === 'paid';
+  
   // Load promotion settings
   useEffect(() => {
     fetchSettings();
@@ -85,6 +89,9 @@ export const EditPromotedPollModal: React.FC<EditPromotedPollModalProps> = ({
   };
   
   const handleBudgetChange = (value: number) => {
+    // Don't allow changes if the poll has been paid for
+    if (isPaid) return;
+    
     // Ensure budget is within limits
     const budget = Math.max(
       settings.minimum_budget,
@@ -116,15 +123,31 @@ export const EditPromotedPollModal: React.FC<EditPromotedPollModalProps> = ({
     setLoading(true);
     
     try {
+      // Only include fields that can be updated based on payment status
+      const updates: any = {};
+      
+      // If not paid, allow budget and target votes updates
+      if (!isPaid) {
+        updates.budget_amount = formData.budget;
+        updates.target_votes = formData.targetVotes;
+        updates.start_date = formData.startDate || undefined;
+        updates.end_date = formData.endDate || undefined;
+      } else {
+        // If paid, only allow non-financial updates if any
+        // Currently, there are no non-financial updates allowed
+      }
+      
+      // If there are no updates to make, show a message and return
+      if (Object.keys(updates).length === 0) {
+        errorToast('No changes to update. Financial details cannot be modified after payment.');
+        setLoading(false);
+        return;
+      }
+      
       const { data, error } = await PromotedPollService.updatePromotedPoll(
         user.id,
         promotedPoll.id,
-        {
-          budget_amount: formData.budget,
-          target_votes: formData.targetVotes,
-          start_date: formData.startDate || undefined,
-          end_date: formData.endDate || undefined
-        }
+        updates
       );
       
       if (error) {
@@ -165,6 +188,19 @@ export const EditPromotedPollModal: React.FC<EditPromotedPollModalProps> = ({
           </h2>
         </div>
         
+        {isPaid && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start space-x-3 mb-6">
+            <AlertCircle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-medium text-yellow-800 mb-1">Payment Already Processed</h3>
+              <p className="text-yellow-700 text-sm">
+                This promotion has already been paid for. Budget, target votes, and date settings cannot be modified after payment.
+                To make changes to these settings, please contact support or create a new promotion.
+              </p>
+            </div>
+          </div>
+        )}
+        
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start space-x-3 mb-6">
           <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
           <div>
@@ -204,16 +240,20 @@ export const EditPromotedPollModal: React.FC<EditPromotedPollModalProps> = ({
                 step={5}
                 value={formData.budget}
                 onChange={(e) => handleBudgetChange(Number(e.target.value))}
-                className="flex-1"
+                className={`flex-1 ${isPaid ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isPaid}
               />
               <div className="w-20">
                 <input
                   type="number"
                   value={formData.budget}
                   onChange={(e) => handleBudgetChange(Number(e.target.value))}
-                  className="w-full p-2 border border-gray-200 rounded-lg text-center"
+                  className={`w-full p-2 border border-gray-200 rounded-lg text-center ${
+                    isPaid ? 'bg-gray-100 opacity-50 cursor-not-allowed' : ''
+                  }`}
                   min={settings.minimum_budget}
                   max={settings.maximum_budget}
+                  disabled={isPaid}
                 />
               </div>
             </div>
@@ -252,8 +292,11 @@ export const EditPromotedPollModal: React.FC<EditPromotedPollModalProps> = ({
                 type="date"
                 value={formData.startDate}
                 onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
-                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className={`w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+                  isPaid ? 'bg-gray-100 opacity-50 cursor-not-allowed' : ''
+                }`}
                 min={new Date().toISOString().split('T')[0]}
+                disabled={isPaid}
               />
               <p className="text-xs text-gray-500 mt-1">
                 Leave blank to start immediately after approval
@@ -268,8 +311,11 @@ export const EditPromotedPollModal: React.FC<EditPromotedPollModalProps> = ({
                 type="date"
                 value={formData.endDate}
                 onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
-                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className={`w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+                  isPaid ? 'bg-gray-100 opacity-50 cursor-not-allowed' : ''
+                }`}
                 min={formData.startDate || new Date().toISOString().split('T')[0]}
+                disabled={isPaid}
               />
               <p className="text-xs text-gray-500 mt-1">
                 Leave blank to run until budget is spent
@@ -316,7 +362,7 @@ export const EditPromotedPollModal: React.FC<EditPromotedPollModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (isPaid && true)}
               className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
             >
               {loading ? (
