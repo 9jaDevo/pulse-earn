@@ -38,12 +38,16 @@ export class PromotedPollService {
           sponsor:sponsor_id(*)
         ` : '*')
         .eq('id', promotedPollId)
-        .single();
+        .maybeSingle();
       
       const { data, error } = await query;
       
       if (error) {
         return { data: null, error: error.message };
+      }
+      
+      if (!data) {
+        return { data: null, error: 'Promoted poll not found' };
       }
       
       return { data, error: null };
@@ -218,9 +222,13 @@ export class PromotedPollService {
         .select('*')
         .eq('id', promotedPollData.sponsor_id)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
       
-      if (sponsorError || !sponsor) {
+      if (sponsorError) {
+        return { data: null, error: sponsorError.message };
+      }
+      
+      if (!sponsor) {
         return { data: null, error: 'Unauthorized: You do not own this sponsor' };
       }
       
@@ -286,10 +294,14 @@ export class PromotedPollService {
           end_date: promotedPollData.end_date
         })
         .select()
-        .single();
+        .maybeSingle();
       
       if (error) {
         return { data: null, error: error.message };
+      }
+      
+      if (!data) {
+        return { data: null, error: 'Failed to create promoted poll' };
       }
       
       return { data, error: null };
@@ -320,7 +332,7 @@ export class PromotedPollService {
           .from('promoted_polls')
           .select('sponsor_id')
           .eq('id', promotedPollId)
-          .single();
+          .maybeSingle();
         
         if (!promotedPoll) {
           return { data: null, error: 'Promoted poll not found' };
@@ -364,10 +376,14 @@ export class PromotedPollService {
         })
         .eq('id', promotedPollId)
         .select()
-        .single();
+        .maybeSingle();
       
       if (error) {
         return { data: null, error: error.message };
+      }
+      
+      if (!data) {
+        return { data: null, error: 'Promoted poll not found or could not be updated' };
       }
       
       return { data, error: null };
@@ -408,10 +424,14 @@ export class PromotedPollService {
         })
         .eq('id', promotedPollId)
         .select()
-        .single();
+        .maybeSingle();
       
       if (error) {
         return { data: null, error: error.message };
+      }
+      
+      if (!data) {
+        return { data: null, error: 'Promoted poll not found or could not be updated' };
       }
       
       return { data, error: null };
@@ -437,10 +457,14 @@ export class PromotedPollService {
         .from('promoted_polls')
         .select('*')
         .eq('id', promotedPollId)
-        .single();
+        .maybeSingle();
       
       if (error) {
         return { data: null, error: error.message };
+      }
+      
+      if (!data) {
+        return { data: null, error: 'Promoted poll not found' };
       }
       
       return { data, error: null };
