@@ -95,13 +95,18 @@ export class PromotedPollService {
           approver:approved_by(name, email)
         `)
         .eq('id', id)
-        .maybeSingle();
+        .limit(1);
 
       if (error) {
         return { data: null, error: error.message };
       }
 
-      return { data, error: null };
+      // Check if any data was returned
+      if (!data || data.length === 0) {
+        return { data: null, error: null };
+      }
+
+      return { data: data[0], error: null };
     } catch (error) {
       return {
         data: null,
@@ -209,22 +214,24 @@ export class PromotedPollService {
   ): Promise<ServiceResponse<PromotedPoll>> {
     try {
       // First check if the user has permission to update this promoted poll
-      const { data: promotedPoll, error: fetchError } = await supabase
+      const { data: promotedPollData, error: fetchError } = await supabase
         .from('promoted_polls')
         .select(`
           *,
           sponsor:sponsor_id(user_id)
         `)
         .eq('id', promotedPollId)
-        .maybeSingle();
+        .limit(1);
 
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
-      if (!promotedPoll) {
+      if (!promotedPollData || promotedPollData.length === 0) {
         return { data: null, error: 'Promoted poll not found' };
       }
+
+      const promotedPoll = promotedPollData[0];
 
       // Check if user is the sponsor owner or an admin
       const isOwner = promotedPoll.sponsor?.user_id === userId;
@@ -319,19 +326,21 @@ export class PromotedPollService {
       }
 
       // Get the promoted poll
-      const { data: promotedPoll, error: fetchError } = await supabase
+      const { data: promotedPollData, error: fetchError } = await supabase
         .from('promoted_polls')
         .select('*')
         .eq('id', promotedPollId)
-        .maybeSingle();
+        .limit(1);
 
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
-      if (!promotedPoll) {
+      if (!promotedPollData || promotedPollData.length === 0) {
         return { data: null, error: 'Promoted poll not found' };
       }
+
+      const promotedPoll = promotedPollData[0];
 
       // Check if poll is in pending_approval status
       if (promotedPoll.status !== 'pending_approval') {
@@ -387,19 +396,21 @@ export class PromotedPollService {
       }
 
       // Get the promoted poll
-      const { data: promotedPoll, error: fetchError } = await supabase
+      const { data: promotedPollData, error: fetchError } = await supabase
         .from('promoted_polls')
         .select('*')
         .eq('id', promotedPollId)
-        .maybeSingle();
+        .limit(1);
 
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
-      if (!promotedPoll) {
+      if (!promotedPollData || promotedPollData.length === 0) {
         return { data: null, error: 'Promoted poll not found' };
       }
+
+      const promotedPoll = promotedPollData[0];
 
       // Check if poll is in pending_approval status
       if (promotedPoll.status !== 'pending_approval') {
@@ -458,22 +469,24 @@ export class PromotedPollService {
   ): Promise<ServiceResponse<PromotedPoll>> {
     try {
       // First check if the user has permission to pause this promoted poll
-      const { data: promotedPoll, error: fetchError } = await supabase
+      const { data: promotedPollData, error: fetchError } = await supabase
         .from('promoted_polls')
         .select(`
           *,
           sponsor:sponsor_id(user_id)
         `)
         .eq('id', promotedPollId)
-        .maybeSingle();
+        .limit(1);
 
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
-      if (!promotedPoll) {
+      if (!promotedPollData || promotedPollData.length === 0) {
         return { data: null, error: 'Promoted poll not found' };
       }
+
+      const promotedPoll = promotedPollData[0];
 
       // Check if user is the sponsor owner or an admin
       const isOwner = promotedPoll.sponsor?.user_id === userId;
@@ -529,22 +542,24 @@ export class PromotedPollService {
   ): Promise<ServiceResponse<PromotedPoll>> {
     try {
       // First check if the user has permission to resume this promoted poll
-      const { data: promotedPoll, error: fetchError } = await supabase
+      const { data: promotedPollData, error: fetchError } = await supabase
         .from('promoted_polls')
         .select(`
           *,
           sponsor:sponsor_id(user_id)
         `)
         .eq('id', promotedPollId)
-        .maybeSingle();
+        .limit(1);
 
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
-      if (!promotedPoll) {
+      if (!promotedPollData || promotedPollData.length === 0) {
         return { data: null, error: 'Promoted poll not found' };
       }
+
+      const promotedPoll = promotedPollData[0];
 
       // Check if user is the sponsor owner or an admin
       const isOwner = promotedPoll.sponsor?.user_id === userId;
@@ -611,22 +626,24 @@ export class PromotedPollService {
   }>> {
     try {
       // First check if the user has permission to pay for this promoted poll
-      const { data: promotedPoll, error: fetchError } = await supabase
+      const { data: promotedPollData, error: fetchError } = await supabase
         .from('promoted_polls')
         .select(`
           *,
           sponsor:sponsor_id(user_id)
         `)
         .eq('id', promotedPollId)
-        .maybeSingle();
+        .limit(1);
 
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
-      if (!promotedPoll) {
+      if (!promotedPollData || promotedPollData.length === 0) {
         return { data: null, error: 'Promoted poll not found' };
       }
+
+      const promotedPoll = promotedPollData[0];
 
       // Check if user is the sponsor owner
       const isOwner = promotedPoll.sponsor?.user_id === userId;
@@ -717,22 +734,24 @@ export class PromotedPollService {
   }>> {
     try {
       // First check if the user has permission to retry payment for this promoted poll
-      const { data: promotedPoll, error: fetchError } = await supabase
+      const { data: promotedPollData, error: fetchError } = await supabase
         .from('promoted_polls')
         .select(`
           *,
           sponsor:sponsor_id(user_id)
         `)
         .eq('id', promotedPollId)
-        .maybeSingle();
+        .limit(1);
 
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
-      if (!promotedPoll) {
+      if (!promotedPollData || promotedPollData.length === 0) {
         return { data: null, error: 'Promoted poll not found' };
       }
+
+      const promotedPoll = promotedPollData[0];
 
       // Check if user is the sponsor owner
       const isOwner = promotedPoll.sponsor?.user_id === userId;
@@ -871,22 +890,24 @@ export class PromotedPollService {
   }>> {
     try {
       // First check if the user has permission to view analytics for this promoted poll
-      const { data: promotedPoll, error: fetchError } = await supabase
+      const { data: promotedPollData, error: fetchError } = await supabase
         .from('promoted_polls')
         .select(`
           *,
           sponsor:sponsor_id(user_id)
         `)
         .eq('id', promotedPollId)
-        .maybeSingle();
+        .limit(1);
 
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
-      if (!promotedPoll) {
+      if (!promotedPollData || promotedPollData.length === 0) {
         return { data: null, error: 'Promoted poll not found' };
       }
+
+      const promotedPoll = promotedPollData[0];
 
       // Check if user is the sponsor owner or an admin
       const isOwner = promotedPoll.sponsor?.user_id === userId;
@@ -1081,21 +1102,23 @@ export class PromotedPollService {
   ): Promise<ServiceResponse<boolean>> {
     try {
       // Get the promoted poll
-      const { data: promotedPoll, error: fetchError } = await supabase
+      const { data: promotedPollData, error: fetchError } = await supabase
         .from('promoted_polls')
         .select('*')
         .eq('id', promotedPollId)
         .eq('status', 'active')
         .eq('payment_status', 'paid')
-        .maybeSingle();
+        .limit(1);
 
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
-      if (!promotedPoll) {
+      if (!promotedPollData || promotedPollData.length === 0) {
         return { data: null, error: 'Promoted poll not found or not active' };
       }
+
+      const promotedPoll = promotedPollData[0];
 
       // Check if target votes has been reached
       if (promotedPoll.current_votes >= promotedPoll.target_votes) {
@@ -1160,7 +1183,7 @@ export class PromotedPollService {
         .from('app_settings')
         .select('settings')
         .eq('category', 'promoted_polls')
-        .maybeSingle();
+        .limit(1);
 
       if (error) {
         return { data: null, error: error.message };
@@ -1176,7 +1199,7 @@ export class PromotedPollService {
       };
 
       return { 
-        data: data?.settings || defaultSettings, 
+        data: (data && data.length > 0) ? data[0].settings : defaultSettings, 
         error: null 
       };
     } catch (error) {
@@ -1203,23 +1226,24 @@ export class PromotedPollService {
 
       if (!isAdmin) {
         // Check if user owns the sponsor
-        const { data: promotedPoll, error: fetchError } = await supabase
+        const { data: promotedPollData, error: fetchError } = await supabase
           .from('promoted_polls')
           .select(`
             *,
             sponsor:sponsor_id(user_id)
           `)
           .eq('id', promotedPollId)
-          .maybeSingle();
+          .limit(1);
 
         if (fetchError) {
           return { data: null, error: fetchError.message };
         }
 
-        if (!promotedPoll) {
+        if (!promotedPollData || promotedPollData.length === 0) {
           return { data: null, error: 'Promoted poll not found' };
         }
 
+        const promotedPoll = promotedPollData[0];
         const isOwner = promotedPoll.sponsor?.user_id === userId;
 
         if (!isOwner) {
