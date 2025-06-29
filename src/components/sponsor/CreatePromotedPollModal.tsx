@@ -1027,4 +1027,3 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
     </div>
   );
 };
-```
