@@ -41,12 +41,14 @@ const PromotedPollDetailModal: React.FC<PromotedPollDetailModalProps> = ({
   const [loading, setLoading] = useState(false);
   
   const handleApprove = async () => {
+    console.log('Approve button clicked in modal for poll ID:', poll.id);
     setLoading(true);
     await onApprove();
     setLoading(false);
   };
   
   const handleReject = async () => {
+    console.log('Reject button clicked in modal for poll ID:', poll.id);
     if (!adminNotes.trim()) {
       alert('Please provide a reason for rejection');
       return;
@@ -58,6 +60,7 @@ const PromotedPollDetailModal: React.FC<PromotedPollDetailModalProps> = ({
   };
   
   const handlePauseResume = async () => {
+    console.log('Pause/Resume button clicked in modal for poll ID:', poll.id, 'Current status:', poll.status);
     setLoading(true);
     await onPauseResume();
     setLoading(false);
@@ -67,7 +70,10 @@ const PromotedPollDetailModal: React.FC<PromotedPollDetailModalProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl max-w-3xl w-full p-8 relative animate-slide-up max-h-[90vh] overflow-y-auto">
         <button
-          onClick={onClose}
+          onClick={() => {
+            console.log('Close button clicked in modal for poll ID:', poll.id);
+            onClose();
+          }}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
         >
           <X className="h-6 w-6" />
@@ -185,7 +191,10 @@ const PromotedPollDetailModal: React.FC<PromotedPollDetailModalProps> = ({
         {/* Action Buttons */}
         <div className="flex flex-wrap justify-end gap-3">
           <button
-            onClick={onClose}
+            onClick={() => {
+              console.log('Close button clicked in modal footer for poll ID:', poll.id);
+              onClose();
+            }}
             className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Close
@@ -258,6 +267,9 @@ export const PromotedPollsManagement: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0);
   const [itemsPerPage] = useState(10);
   
+  // Add logging for component loading state
+  console.log('PromotedPollsManagement loading state:', loading);
+  
   useEffect(() => {
     if (user) {
       fetchPromotedPolls();
@@ -267,6 +279,7 @@ export const PromotedPollsManagement: React.FC = () => {
   const fetchPromotedPolls = async () => {
     if (!user) return;
     
+    console.log('Fetching promoted polls...');
     setLoading(true);
     setError(null);
     
@@ -291,13 +304,16 @@ export const PromotedPollsManagement: React.FC = () => {
       );
       
       if (fetchError) {
+        console.error('Error fetching promoted polls:', fetchError);
         setError(fetchError);
         return;
       }
       
+      console.log('Fetched promoted polls:', data?.promotedPolls?.length || 0, 'total:', data?.totalCount || 0);
       setPromotedPolls(data?.promotedPolls || []);
       setTotalItems(data?.totalCount || 0);
     } catch (err) {
+      console.error('Exception fetching promoted polls:', err);
       setError(err instanceof Error ? err.message : 'Failed to load promoted polls');
     } finally {
       setLoading(false);
@@ -305,12 +321,14 @@ export const PromotedPollsManagement: React.FC = () => {
   };
   
   const handleSearch = () => {
+    console.log('Search button clicked with term:', searchTerm);
     // Reset to first page when searching
     setCurrentPage(1);
     fetchPromotedPolls();
   };
   
   const handleApprove = async (pollId: string) => {
+    console.log('Approve function called for poll ID:', pollId);
     if (!user) return;
     
     try {
@@ -321,19 +339,23 @@ export const PromotedPollsManagement: React.FC = () => {
       );
       
       if (error) {
+        console.error('Error approving poll:', error);
         errorToast(error);
         return;
       }
       
+      console.log('Poll approved successfully:', pollId);
       successToast('Promoted poll approved successfully');
       fetchPromotedPolls();
       setSelectedPoll(null);
     } catch (err) {
+      console.error('Exception approving poll:', err);
       errorToast('Failed to approve promoted poll');
     }
   };
   
   const handleReject = async (pollId: string, notes: string) => {
+    console.log('Reject function called for poll ID:', pollId, 'with notes:', notes);
     if (!user) return;
     
     try {
@@ -345,19 +367,23 @@ export const PromotedPollsManagement: React.FC = () => {
       );
       
       if (error) {
+        console.error('Error rejecting poll:', error);
         errorToast(error);
         return;
       }
       
+      console.log('Poll rejected successfully:', pollId);
       successToast('Promoted poll rejected successfully');
       fetchPromotedPolls();
       setSelectedPoll(null);
     } catch (err) {
+      console.error('Exception rejecting poll:', err);
       errorToast('Failed to reject promoted poll');
     }
   };
   
   const handlePauseResume = async (poll: PromotedPoll) => {
+    console.log('Pause/Resume function called for poll ID:', poll.id, 'Current status:', poll.status);
     if (!user) return;
     
     const newStatus = poll.status === 'active' ? 'paused' : 'active';
@@ -370,10 +396,12 @@ export const PromotedPollsManagement: React.FC = () => {
       );
       
       if (error) {
+        console.error('Error updating poll status:', error);
         errorToast(error);
         return;
       }
       
+      console.log('Poll status updated successfully:', poll.id, 'New status:', newStatus);
       successToast(`Promoted poll ${newStatus === 'active' ? 'resumed' : 'paused'} successfully`);
       fetchPromotedPolls();
       
@@ -385,6 +413,7 @@ export const PromotedPollsManagement: React.FC = () => {
         });
       }
     } catch (err) {
+      console.error('Exception updating poll status:', err);
       errorToast(`Failed to ${newStatus === 'active' ? 'resume' : 'pause'} promoted poll`);
     }
   };
@@ -472,6 +501,7 @@ export const PromotedPollsManagement: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => {
+                console.log('Status filter changed to:', e.target.value);
                 setStatusFilter(e.target.value);
                 setCurrentPage(1); // Reset to first page when filter changes
               }}
@@ -488,6 +518,7 @@ export const PromotedPollsManagement: React.FC = () => {
             <select
               value={paymentStatusFilter}
               onChange={(e) => {
+                console.log('Payment status filter changed to:', e.target.value);
                 setPaymentStatusFilter(e.target.value);
                 setCurrentPage(1); // Reset to first page when filter changes
               }}
@@ -502,6 +533,7 @@ export const PromotedPollsManagement: React.FC = () => {
             
             <button
               onClick={() => {
+                console.log('Reset filters button clicked');
                 setSearchTerm('');
                 setStatusFilter('all');
                 setPaymentStatusFilter('all');
@@ -629,7 +661,10 @@ export const PromotedPollsManagement: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
                         <button
-                          onClick={() => setSelectedPoll(poll)}
+                          onClick={() => {
+                            console.log('View Details button clicked for poll ID:', poll.id);
+                            setSelectedPoll(poll);
+                          }}
                           className="text-primary-600 hover:text-primary-900"
                           title="View Details"
                         >
@@ -638,8 +673,9 @@ export const PromotedPollsManagement: React.FC = () => {
                         
                         {poll.status === 'pending_approval' && poll.payment_status === 'paid' && (
                           <button
-                            onClick={async () => {
-                              await handleApprove(poll.id);
+                            onClick={() => {
+                              console.log('Approve button clicked for poll ID:', poll.id);
+                              handleApprove(poll.id);
                             }}
                             className="text-success-600 hover:text-success-900"
                             title="Approve"
@@ -650,7 +686,10 @@ export const PromotedPollsManagement: React.FC = () => {
                         
                         {poll.status === 'pending_approval' && (
                           <button
-                            onClick={() => setSelectedPoll(poll)}
+                            onClick={() => {
+                              console.log('Reject button clicked for poll ID:', poll.id);
+                              setSelectedPoll(poll);
+                            }}
                             className="text-error-600 hover:text-error-900"
                             title="Reject"
                           >
@@ -660,8 +699,9 @@ export const PromotedPollsManagement: React.FC = () => {
                         
                         {poll.status === 'active' && (
                           <button
-                            onClick={async () => {
-                              await handlePauseResume(poll);
+                            onClick={() => {
+                              console.log('Pause button clicked for poll ID:', poll.id);
+                              handlePauseResume(poll);
                             }}
                             className="text-warning-600 hover:text-warning-900"
                             title="Pause"
@@ -672,8 +712,9 @@ export const PromotedPollsManagement: React.FC = () => {
                         
                         {poll.status === 'paused' && (
                           <button
-                            onClick={async () => {
-                              await handlePauseResume(poll);
+                            onClick={() => {
+                              console.log('Resume button clicked for poll ID:', poll.id);
+                              handlePauseResume(poll);
                             }}
                             className="text-success-600 hover:text-success-900"
                             title="Resume"
@@ -694,7 +735,10 @@ export const PromotedPollsManagement: React.FC = () => {
             currentPage={currentPage}
             totalItems={totalItems}
             itemsPerPage={itemsPerPage}
-            onPageChange={setCurrentPage}
+            onPageChange={(page) => {
+              console.log('Pagination changed to page:', page);
+              setCurrentPage(page);
+            }}
           />
         </div>
       )}
@@ -703,14 +747,20 @@ export const PromotedPollsManagement: React.FC = () => {
       {selectedPoll && (
         <PromotedPollDetailModal
           poll={selectedPoll}
-          onClose={() => setSelectedPoll(null)}
+          onClose={() => {
+            console.log('Modal closed for poll ID:', selectedPoll.id);
+            setSelectedPoll(null);
+          }}
           onApprove={async () => {
+            console.log('Approve function called from modal for poll ID:', selectedPoll.id);
             await handleApprove(selectedPoll.id);
           }}
           onReject={async (notes) => {
+            console.log('Reject function called from modal for poll ID:', selectedPoll.id, 'with notes:', notes);
             await handleReject(selectedPoll.id, notes);
           }}
           onPauseResume={async () => {
+            console.log('Pause/Resume function called from modal for poll ID:', selectedPoll.id);
             await handlePauseResume(selectedPoll);
           }}
         />
