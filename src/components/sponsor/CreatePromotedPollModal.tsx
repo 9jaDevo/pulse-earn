@@ -25,7 +25,11 @@ import type { Poll, PaymentMethod } from '../../types/api';
 import getSymbolFromCurrency from 'currency-symbol-map';
 
 // Initialize Stripe outside of component to avoid re-initialization
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+// Only initialize if we have a valid Stripe key
+const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+const stripePromise = stripePublicKey && stripePublicKey !== 'your_stripe_publishable_key' 
+  ? loadStripe(stripePublicKey) 
+  : null;
 
 interface CreatePromotedPollModalProps {
   isOpen: boolean;
@@ -157,14 +161,22 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         return;
       }
       
-      setPaymentMethods(data || []);
+      // Filter out Stripe payment methods if Stripe is not configured
+      const filteredMethods = data?.filter(method => {
+        if (method.type === 'stripe' && !stripePromise) {
+          return false;
+        }
+        return true;
+      }) || [];
+      
+      setPaymentMethods(filteredMethods);
       
       // Default to wallet if available
-      const walletMethod = data?.find(m => m.type === 'wallet');
+      const walletMethod = filteredMethods?.find(m => m.type === 'wallet');
       if (walletMethod) {
         setSelectedPaymentMethod(walletMethod.id);
-      } else if (data && data.length > 0) {
-        setSelectedPaymentMethod(data[0].id);
+      } else if (filteredMethods && filteredMethods.length > 0) {
+        setSelectedPaymentMethod(filteredMethods[0].id);
       }
     } catch (err) {
       errorToast('Failed to load payment methods');
@@ -183,15 +195,23 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         return;
       }
       
-      setPaymentMethods(data || []);
+      // Filter out Stripe payment methods if Stripe is not configured
+      const filteredMethods = data?.filter(method => {
+        if (method.type === 'stripe' && !stripePromise) {
+          return false;
+        }
+        return true;
+      }) || [];
+      
+      setPaymentMethods(filteredMethods);
       
       // Reset selected payment method if it's no longer available
-      if (data && selectedPaymentMethod) {
-        const methodStillAvailable = data.some(m => m.id === selectedPaymentMethod);
-        if (!methodStillAvailable && data.length > 0) {
+      if (filteredMethods && selectedPaymentMethod) {
+        const methodStillAvailable = filteredMethods.some(m => m.id === selectedPaymentMethod);
+        if (!methodStillAvailable && filteredMethods.length > 0) {
           // Default to wallet if available
-          const walletMethod = data.find(m => m.type === 'wallet');
-          setSelectedPaymentMethod(walletMethod ? walletMethod.id : data[0].id);
+          const walletMethod = filteredMethods.find(m => m.type === 'wallet');
+          setSelectedPaymentMethod(walletMethod ? walletMethod.id : filteredMethods[0].id);
         }
       }
     } catch (err) {
@@ -313,6 +333,10 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         onSuccess();
         onClose();
       } else if (selectedMethod.type === 'stripe') {
+        if (!stripePromise) {
+          throw new Error('Stripe is not configured. Please contact support.');
+        }
+        
         // Initialize Stripe payment
         const { data: stripeData, error: stripeError } = await PaymentService.initializeStripePayment(
           user.id,
@@ -782,7 +806,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
             </div>
             
             {/* Stripe Payment Form */}
-            {selectedPaymentMethod === paymentMethods.find(m => m.type === 'stripe')?.id && clientSecret && (
+            {selectedPaymentMethod === paymentMethods.find(m => m.type === 'stripe')?.id && clientSecret && stripePromise && (
               <div className="mt-6">
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
                   <StripePaymentForm 

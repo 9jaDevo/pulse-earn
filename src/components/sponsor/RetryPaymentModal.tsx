@@ -21,7 +21,11 @@ import type { PromotedPoll, PaymentMethod } from '../../types/api';
 import getSymbolFromCurrency from 'currency-symbol-map';
 
 // Initialize Stripe outside of component to avoid re-initialization
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+// Only initialize if we have a valid Stripe key
+const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+const stripePromise = stripePublicKey && stripePublicKey !== 'your_stripe_publishable_key' 
+  ? loadStripe(stripePublicKey) 
+  : null;
 
 interface RetryPaymentModalProps {
   isOpen: boolean;
@@ -67,14 +71,22 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
           return;
         }
         
-        setPaymentMethods(data || []);
+        // Filter out Stripe payment methods if Stripe is not configured
+        const filteredMethods = data?.filter(method => {
+          if (method.type === 'stripe' && !stripePromise) {
+            return false;
+          }
+          return true;
+        }) || [];
+        
+        setPaymentMethods(filteredMethods);
         
         // Default to wallet if available
-        const walletMethod = data?.find(m => m.type === 'wallet');
+        const walletMethod = filteredMethods?.find(m => m.type === 'wallet');
         if (walletMethod) {
           setSelectedPaymentMethod(walletMethod.id);
-        } else if (data && data.length > 0) {
-          setSelectedPaymentMethod(data[0].id);
+        } else if (filteredMethods && filteredMethods.length > 0) {
+          setSelectedPaymentMethod(filteredMethods[0].id);
         }
       } catch (err) {
         errorToast('Failed to load payment methods');
@@ -123,6 +135,10 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
       
       if (!paymentMethod) {
         throw new Error('Invalid payment method');
+      }
+      
+      if (paymentMethod.type === 'stripe' && !stripePromise) {
+        throw new Error('Stripe is not configured. Please contact support.');
       }
       
       // Retry payment
@@ -388,7 +404,7 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
         )}
         
         {/* Stripe Payment Form */}
-        {clientSecret && (
+        {clientSecret && stripePromise && (
           <div className="mt-6">
             <Elements stripe={stripePromise} options={{ clientSecret }}>
               <StripePaymentForm 
