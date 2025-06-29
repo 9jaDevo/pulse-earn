@@ -210,6 +210,7 @@ export class ProfileService {
       order?: 'asc' | 'desc';
       role?: Profile['role'];
       country?: string;
+      currency?: string;
     } = {}
   ): Promise<ServiceResponse<{
     profiles: Profile[];
@@ -217,7 +218,15 @@ export class ProfileService {
   }>> {
     console.log('[ProfileService] Fetching profiles with options:', options);
     try {
-      const { limit = 50, offset = 0, orderBy = 'points', order = 'desc', role, country } = options;
+      const { 
+        limit = 50, 
+        offset = 0, 
+        orderBy = 'points', 
+        order = 'desc', 
+        role, 
+        country,
+        currency
+      } = options;
 
       // Build the query for profiles
       let query = supabase
@@ -234,6 +243,10 @@ export class ProfileService {
         query = query.eq('country', country);
       }
 
+      if (currency) {
+        query = query.eq('currency', currency);
+      }
+
       // Get total count in a separate query
       let countQuery = supabase
         .from('profiles')
@@ -245,6 +258,10 @@ export class ProfileService {
 
       if (country) {
         countQuery = countQuery.eq('country', country);
+      }
+
+      if (currency) {
+        countQuery = countQuery.eq('currency', currency);
       }
 
       // Run both queries in parallel
@@ -499,6 +516,76 @@ export class ProfileService {
       };
     }
   }
+
+  /**
+   * Update user's preferred currency
+   */
+  static async updateUserCurrency(
+    userId: string,
+    currency: string
+  ): Promise<ServiceResponse<Profile>> {
+    try {
+      // Validate currency
+      const { data: supportedCurrencies } = await SettingsService.getSupportedCurrencies();
+      
+      if (!supportedCurrencies?.includes(currency)) {
+        return { data: null, error: `Unsupported currency: ${currency}` };
+      }
+      
+      // Update profile
+      const { data, error } = await this.updateUserProfile(userId, { currency });
+      
+      if (error) {
+        return { data: null, error };
+      }
+      
+      return { data, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to update user currency'
+      };
+    }
+  }
+
+  /**
+   * Get user's preferred currency
+   */
+  static async getUserCurrency(userId: string): Promise<ServiceResponse<string>> {
+    try {
+      const { data: profile, error } = await this.fetchProfileById(userId);
+      
+      if (error) {
+        return { data: null, error };
+      }
+      
+      if (!profile) {
+        return { data: null, error: 'User profile not found' };
+      }
+      
+      // If user has a preferred currency, return it
+      if (profile.currency) {
+        return { data: profile.currency, error: null };
+      }
+      
+      // Otherwise, get default currency for user's country
+      if (profile.country) {
+        const { data: countrySetting } = await SettingsService.getCountryCurrencySettings(profile.country);
+        
+        if (countrySetting) {
+          return { data: countrySetting.default_currency, error: null };
+        }
+      }
+      
+      // Default to USD if no country or no country setting
+      return { data: 'USD', error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get user currency'
+      };
+    }
+  }
 }
 
 // Export individual functions for backward compatibility and easier testing
@@ -511,5 +598,7 @@ export const {
   updateUserPoints,
   addBadgeToUser,
   searchProfiles,
-  getUserRank
+  getUserRank,
+  updateUserCurrency,
+  getUserCurrency
 } = ProfileService;

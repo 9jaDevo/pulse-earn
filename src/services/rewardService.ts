@@ -39,6 +39,7 @@ export interface TriviaGameSummary {
  * - Daily Trivia Challenge system
  * - Watch & Win ad reward system
  * - Reward history tracking
+ * - Multi-currency support for reward store
  * 
  * When migrating to Node.js backend, only this file needs to be updated
  * to make HTTP requests instead of direct Supabase calls.
@@ -855,10 +856,11 @@ export class RewardService {
       minPoints?: number;
       maxPoints?: number;
       inStock?: boolean;
+      currency?: string;
     } = {}
   ): Promise<ServiceResponse<RewardStoreItem[]>> {
     try {
-      const { limit = 50, itemType, minPoints, maxPoints, inStock } = options;
+      const { limit = 50, itemType, minPoints, maxPoints, inStock, currency } = options;
 
       let query = supabase
         .from('reward_store_items')
@@ -883,10 +885,39 @@ export class RewardService {
         query = query.or('stock_quantity.gt.0,stock_quantity.is.null');
       }
 
+      if (currency) {
+        query = query.eq('currency', currency);
+      }
+
       const { data, error } = await query;
 
       if (error) {
         return { data: null, error: error.message };
+      }
+
+      // If currency is provided and items have different currencies, convert points cost
+      if (currency && data) {
+        const convertedItems = await Promise.all(data.map(async (item) => {
+          if (item.currency === currency) {
+            return item;
+          }
+          
+          // Convert points cost to the requested currency
+          const { data: convertedCost } = await SettingsService.getExchangeRate(item.currency, currency);
+          
+          if (convertedCost) {
+            return {
+              ...item,
+              points_cost: Math.round(item.points_cost * convertedCost),
+              original_currency: item.currency,
+              original_points_cost: item.points_cost
+            };
+          }
+          
+          return item;
+        }));
+        
+        return { data: convertedItems, error: null };
       }
 
       return { data: data || [], error: null };
@@ -913,9 +944,15 @@ export class RewardService {
         return { data: null, error: 'Unauthorized: Only admins can create reward items' };
       }
 
+      // Ensure currency is set
+      const itemWithCurrency = {
+        ...itemData,
+        currency: itemData.currency || 'USD'
+      };
+
       const { data, error } = await supabase
         .from('reward_store_items')
-        .insert(itemData)
+        .insert(itemWithCurrency)
         .select()
         .single();
 
@@ -1025,10 +1062,11 @@ export class RewardService {
     options: {
       limit?: number;
       status?: 'pending_fulfillment' | 'fulfilled' | 'cancelled';
+      currency?: string;
     } = {}
   ): Promise<ServiceResponse<RedeemedItem[]>> {
     try {
-      const { limit = 50, status } = options;
+      const { limit = 50, status, currency } = options;
 
       let query = supabase
         .from('redeemed_items')
@@ -1045,6 +1083,40 @@ export class RewardService {
 
       if (error) {
         return { data: null, error: error.message };
+      }
+
+      // If currency is provided, convert points cost to the requested currency
+      if (currency && data) {
+        const convertedItems = await Promise.all(data.map(async (item) => {
+          // Get the original currency from the item or from the store item
+          const { data: storeItem } = await supabase
+            .from('reward_store_items')
+            .select('currency')
+            .eq('id', item.item_id)
+            .single();
+          
+          const itemCurrency = storeItem?.currency || 'USD';
+          
+          if (itemCurrency === currency) {
+            return item;
+          }
+          
+          // Convert points cost to the requested currency
+          const { data: convertedCost } = await SettingsService.getExchangeRate(itemCurrency, currency);
+          
+          if (convertedCost) {
+            return {
+              ...item,
+              points_cost: Math.round(item.points_cost * convertedCost),
+              original_currency: itemCurrency,
+              original_points_cost: item.points_cost
+            };
+          }
+          
+          return item;
+        }));
+        
+        return { data: convertedItems, error: null };
       }
 
       return { data: data || [], error: null };
@@ -1071,13 +1143,9 @@ export class RewardService {
         return { data: null, error: profileError || 'User profile not found' };
       }
       
-      if (profile.points < request.pointsCost) {
-        return { 
-          data: null, 
-          error: `Insufficient points. You have ${profile.points} points, but this item costs ${request.pointsCost} points.` 
-        };
-      }
-
+      // Get user's preferred currency
+      const userCurrency = profile.currency || 'USD';
+      
       // 2. Check if the item exists and is available
       const { data: storeItem, error: storeItemError } = await supabase
         .from('reward_store_items')
@@ -1089,6 +1157,23 @@ export class RewardService {
       if (storeItemError) {
         return { data: null, error: 'Item not found or no longer available' };
       }
+      
+      // Convert item cost to user's currency if different
+      let pointsCost = request.pointsCost;
+      if (storeItem.currency !== userCurrency) {
+        const { data: exchangeRate } = await SettingsService.getExchangeRate(storeItem.currency, userCurrency);
+        
+        if (exchangeRate) {
+          pointsCost = Math.round(request.pointsCost * exchangeRate);
+        }
+      }
+      
+      if (profile.points < pointsCost) {
+        return { 
+          data: null, 
+          error: `Insufficient points. You have ${profile.points} points, but this item costs ${pointsCost} points.` 
+        };
+      }
 
       // 3. Check if there's enough stock
       if (storeItem.stock_quantity !== null && storeItem.stock_quantity <= 0) {
@@ -1099,7 +1184,7 @@ export class RewardService {
       // Note: ProfileService.updateUserPoints adds points, so we pass a negative value to deduct
       const { data: updatedProfile, error: pointsError } = await ProfileService.updateUserPoints(
         userId,
-        -request.pointsCost // Deduct points
+        -pointsCost // Deduct points
       );
 
       if (pointsError) {
@@ -1117,7 +1202,7 @@ export class RewardService {
           user_id: userId,
           item_id: request.itemId,
           item_name: request.itemName,
-          points_cost: request.pointsCost,
+          points_cost: pointsCost,
           fulfillment_details: request.fulfillmentDetails || {},
           status: 'pending_fulfillment' // Initial status
         })
@@ -1126,7 +1211,7 @@ export class RewardService {
 
       if (recordError) {
         // If recording fails, attempt to refund the points
-        await ProfileService.updateUserPoints(userId, request.pointsCost);
+        await ProfileService.updateUserPoints(userId, pointsCost);
         return { data: null, error: recordError.message };
       }
 
@@ -1147,17 +1232,19 @@ export class RewardService {
         .insert({
           user_id: userId,
           reward_type: 'spin', // Using existing type as a workaround
-          points_earned: -request.pointsCost, // Negative to indicate points spent
+          points_earned: -pointsCost, // Negative to indicate points spent
           reward_data: { 
             redemption_type: 'store_item',
             item_id: request.itemId,
-            item_name: request.itemName
+            item_name: request.itemName,
+            currency: storeItem.currency,
+            user_currency: userCurrency
           }
         });
 
       const result: RedeemItemResult = {
         success: true,
-        message: `Successfully redeemed ${request.itemName} for ${request.pointsCost} points!`,
+        message: `Successfully redeemed ${request.itemName} for ${pointsCost} points!`,
         newPointsBalance: updatedProfile.points,
         redeemedItemId: redeemedItemRecord.id
       };

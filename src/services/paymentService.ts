@@ -11,6 +11,7 @@ import type { Transaction, TransactionCreateRequest, PaymentMethod } from '../ty
  * - Processing payments from wallet balance
  * - Initiating external payment gateway transactions
  * - Recording transaction history
+ * - Multi-currency support
  * 
  * When migrating to Node.js backend, only this file needs to be updated
  * to make HTTP requests instead of direct Supabase calls.
@@ -66,28 +67,88 @@ export class PaymentService {
   }
   
   /**
+   * Get available payment methods for a country and currency
+   */
+  static async getAvailablePaymentMethods(
+    countryCode?: string,
+    currency?: string
+  ): Promise<ServiceResponse<PaymentMethod[]>> {
+    try {
+      // Get enabled payment methods for the country
+      const { data: enabledMethods, error: methodsError } = await SettingsService.getPaymentGatewaySettings(countryCode);
+      
+      if (methodsError) {
+        return { data: null, error: methodsError };
+      }
+      
+      // Get all payment methods
+      const { data: allMethods, error: allMethodsError } = await this.getPaymentMethods();
+      
+      if (allMethodsError) {
+        return { data: null, error: allMethodsError };
+      }
+      
+      // Filter methods by enabled methods
+      const availableMethods = allMethods?.filter(method => 
+        enabledMethods?.includes(method.type)
+      ) || [];
+      
+      // If currency is provided, filter methods that support the currency
+      if (currency) {
+        // In a real implementation, you would check if each payment method supports the currency
+        // For now, we'll assume all methods support all currencies
+      }
+      
+      return { data: availableMethods, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get available payment methods'
+      };
+    }
+  }
+  
+  /**
    * Process payment from wallet balance
    */
   static async processWalletPayment(
     userId: string,
     amount: number,
-    promotedPollId?: string
+    promotedPollId?: string,
+    currency: string = 'USD'
   ): Promise<ServiceResponse<Transaction>> {
     try {
       // Get settings for points to USD conversion
       const { data: settings } = await SettingsService.getSettings('promoted_polls');
       const pointsToUsdConversion = settings?.points_to_usd_conversion || 100; // Default: 100 points = $1
       
-      // Calculate points needed
-      const pointsNeeded = amount * pointsToUsdConversion;
-      
-      // Check if user has enough points
+      // Get user's preferred currency
       const { data: profile, error: profileError } = await ProfileService.fetchProfileById(userId);
       
       if (profileError || !profile) {
         return { data: null, error: profileError || 'User profile not found' };
       }
       
+      const userCurrency = profile.currency || 'USD';
+      
+      // Convert amount to user's currency if different
+      let convertedAmount = amount;
+      if (currency !== userCurrency) {
+        const { data: exchangeRate, error: rateError } = await SettingsService.getExchangeRate(currency, userCurrency);
+        
+        if (rateError) {
+          return { data: null, error: rateError };
+        }
+        
+        if (exchangeRate) {
+          convertedAmount = amount * exchangeRate;
+        }
+      }
+      
+      // Calculate points needed in user's currency
+      const pointsNeeded = Math.round(convertedAmount * pointsToUsdConversion);
+      
+      // Check if user has enough points
       if (profile.points < pointsNeeded) {
         return { 
           data: null, 
@@ -112,12 +173,15 @@ export class PaymentService {
           user_id: userId,
           promoted_poll_id: promotedPollId,
           amount,
-          currency: 'USD',
+          currency,
+          original_amount: convertedAmount,
+          original_currency: userCurrency,
           payment_method: 'wallet',
           status: 'completed',
           metadata: {
             points_used: pointsNeeded,
-            conversion_rate: pointsToUsdConversion
+            conversion_rate: pointsToUsdConversion,
+            exchange_rate: currency !== userCurrency ? convertedAmount / amount : 1
           }
         })
         .select()
@@ -149,6 +213,22 @@ export class PaymentService {
     transactionData: TransactionCreateRequest
   ): Promise<ServiceResponse<Transaction>> {
     try {
+      // Get user's preferred currency
+      const { data: profile } = await ProfileService.fetchProfileById(userId);
+      const userCurrency = profile?.currency || 'USD';
+      
+      // If transaction currency is different from user's currency, store both
+      let originalAmount = transactionData.amount;
+      let originalCurrency = transactionData.currency || 'USD';
+      
+      if (originalCurrency !== userCurrency) {
+        const { data: exchangeRate } = await SettingsService.getExchangeRate(originalCurrency, userCurrency);
+        
+        if (exchangeRate) {
+          originalAmount = transactionData.amount * exchangeRate;
+        }
+      }
+      
       const { data, error } = await supabase
         .from('transactions')
         .insert({
@@ -156,6 +236,8 @@ export class PaymentService {
           promoted_poll_id: transactionData.promoted_poll_id,
           amount: transactionData.amount,
           currency: transactionData.currency || 'USD',
+          original_amount: originalAmount,
+          original_currency: userCurrency,
           payment_method: transactionData.payment_method,
           status: 'pending',
           metadata: transactionData.metadata || {}
@@ -226,13 +308,14 @@ export class PaymentService {
       limit?: number;
       offset?: number;
       status?: 'pending' | 'completed' | 'failed' | 'refunded';
+      currency?: string;
     } = {}
   ): Promise<ServiceResponse<{
     transactions: Transaction[];
     totalCount: number;
   }>> {
     try {
-      const { limit = 50, offset = 0, status } = options;
+      const { limit = 50, offset = 0, status, currency } = options;
       
       let query = supabase
         .from('transactions')
@@ -243,6 +326,10 @@ export class PaymentService {
       
       if (status) {
         query = query.eq('status', status);
+      }
+      
+      if (currency) {
+        query = query.eq('currency', currency);
       }
       
       const { data, error, count } = await query;
@@ -276,6 +363,7 @@ export class PaymentService {
       offset?: number;
       status?: 'pending' | 'completed' | 'failed' | 'refunded';
       payment_method?: 'wallet' | 'stripe' | 'paypal' | 'paystack';
+      currency?: string;
     } = {}
   ): Promise<ServiceResponse<{
     transactions: Transaction[];
@@ -289,7 +377,7 @@ export class PaymentService {
         return { data: null, error: 'Unauthorized: Only admins can view all transactions' };
       }
       
-      const { limit = 50, offset = 0, status, payment_method } = options;
+      const { limit = 50, offset = 0, status, payment_method, currency } = options;
       
       let query = supabase
         .from('transactions')
@@ -303,6 +391,10 @@ export class PaymentService {
       
       if (payment_method) {
         query = query.eq('payment_method', payment_method);
+      }
+      
+      if (currency) {
+        query = query.eq('currency', currency);
       }
       
       const { data, error, count } = await query;
@@ -333,17 +425,37 @@ export class PaymentService {
   static async initializeStripePayment(
     userId: string,
     amount: number,
-    promotedPollId?: string
+    promotedPollId?: string,
+    currency: string = 'USD'
   ): Promise<ServiceResponse<{
     clientSecret: string;
     transactionId: string;
   }>> {
     try {
+      // Get user's preferred currency
+      const { data: profile } = await ProfileService.fetchProfileById(userId);
+      const userCurrency = profile?.currency || 'USD';
+      
+      // Convert amount to USD if needed (Stripe requires USD)
+      let usdAmount = amount;
+      if (currency !== 'USD') {
+        const { data: exchangeRate } = await SettingsService.getExchangeRate(currency, 'USD');
+        
+        if (exchangeRate) {
+          usdAmount = amount * exchangeRate;
+        }
+      }
+      
       // Create a pending transaction
       const { data: transaction, error: transactionError } = await this.createTransaction(userId, {
-        amount,
+        amount: usdAmount,
+        currency: 'USD',
         payment_method: 'stripe',
-        promoted_poll_id: promotedPollId
+        promoted_poll_id: promotedPollId,
+        metadata: {
+          original_amount: amount,
+          original_currency: currency
+        }
       });
       
       if (transactionError) {
@@ -363,10 +475,11 @@ export class PaymentService {
             'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
           },
           body: JSON.stringify({
-            amount,
+            amount: usdAmount,
             userId,
             transactionId: transaction.id,
-            promotedPollId: promotedPollId
+            promotedPollId: promotedPollId,
+            currency: 'USD' // Stripe requires USD
           })
         });
         
@@ -425,67 +538,43 @@ export class PaymentService {
   }
   
   /**
-   * Initialize a PayPal payment (placeholder)
-   * In a real implementation, this would create a PayPal order
-   */
-  static async initializePayPalPayment(
-    userId: string,
-    amount: number,
-    promotedPollId?: string
-  ): Promise<ServiceResponse<{
-    approvalUrl: string;
-    transactionId: string;
-  }>> {
-    try {
-      // This is a placeholder implementation
-      // In a real implementation, this would call a Supabase Edge Function or external API
-      
-      // Create a pending transaction
-      const { data: transaction, error } = await this.createTransaction(userId, {
-        amount,
-        payment_method: 'paypal',
-        promoted_poll_id: promotedPollId
-      });
-      
-      if (error) {
-        return { data: null, error };
-      }
-      
-      // In a real implementation, this would return a PayPal approval URL
-      // For now, we'll return a fake approval URL
-      return { 
-        data: {
-          approvalUrl: `https://paypal.com/checkout/fake-order-${Date.now()}`,
-          transactionId: transaction.id
-        }, 
-        error: null 
-      };
-    } catch (error) {
-      return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Failed to initialize PayPal payment'
-      };
-    }
-  }
-  
-  /**
    * Initialize a Paystack payment
    * This creates a transaction record and calls the Paystack API to create a transaction
    */
   static async initializePaystackPayment(
     userId: string,
     amount: number,
-    promotedPollId?: string
+    promotedPollId?: string,
+    currency: string = 'USD'
   ): Promise<ServiceResponse<{
     authorizationUrl: string;
     transactionId: string;
   }>> {
     try {
+      // Get user's preferred currency
+      const { data: profile } = await ProfileService.fetchProfileById(userId);
+      const userCurrency = profile?.currency || 'USD';
+      
+      // Convert amount to NGN if needed (Paystack primarily uses NGN)
+      let ngnAmount = amount;
+      if (currency !== 'NGN') {
+        const { data: exchangeRate } = await SettingsService.getExchangeRate(currency, 'NGN');
+        
+        if (exchangeRate) {
+          ngnAmount = amount * exchangeRate;
+        }
+      }
+      
       // Create a pending transaction
       const { data: transaction, error: transactionError } = await this.createTransaction(userId, {
-        amount,
+        amount: ngnAmount,
+        currency: 'NGN',
         payment_method: 'paystack',
-        promoted_poll_id: promotedPollId
+        promoted_poll_id: promotedPollId,
+        metadata: {
+          original_amount: amount,
+          original_currency: currency
+        }
       });
       
       if (transactionError) {
@@ -505,10 +594,11 @@ export class PaymentService {
             'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
           },
           body: JSON.stringify({
-            amount,
+            amount: ngnAmount,
             userId,
             transactionId: transaction.id,
-            promotedPollId: promotedPollId
+            promotedPollId: promotedPollId,
+            currency: 'NGN' // Paystack primarily uses NGN
           })
         });
         
@@ -565,18 +655,56 @@ export class PaymentService {
       };
     }
   }
+
+  /**
+   * Convert amount between currencies
+   */
+  static async convertAmount(
+    amount: number,
+    fromCurrency: string,
+    toCurrency: string
+  ): Promise<ServiceResponse<number>> {
+    try {
+      // If currencies are the same, no conversion needed
+      if (fromCurrency === toCurrency) {
+        return { data: amount, error: null };
+      }
+      
+      // Get exchange rate
+      const { data: rate, error } = await SettingsService.getExchangeRate(fromCurrency, toCurrency);
+      
+      if (error) {
+        return { data: null, error };
+      }
+      
+      if (!rate) {
+        return { data: null, error: `Exchange rate not found for ${fromCurrency} to ${toCurrency}` };
+      }
+      
+      // Convert amount
+      const convertedAmount = amount * rate;
+      
+      return { data: convertedAmount, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to convert amount'
+      };
+    }
+  }
 }
 
 // Export individual functions for backward compatibility and easier testing
 export const {
   getPaymentMethods,
   getPaymentMethodById,
+  getAvailablePaymentMethods,
   processWalletPayment,
   createTransaction,
   updateTransactionStatus,
   getUserTransactions,
   getAllTransactions,
   initializeStripePayment,
-  initializePayPalPayment,
-  initializePaystackPayment
+  initializePaystackPayment,
+  convertAmount
 } = PaymentService;

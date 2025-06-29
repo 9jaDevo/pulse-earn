@@ -32,6 +32,7 @@ export interface ProfileUpdateRequest {
   payout_method?: string;
   paypal_email?: string;
   bank_details?: Record<string, any>;
+  currency?: string;
 }
 
 export interface PointsUpdateRequest {
@@ -427,6 +428,9 @@ export interface RedeemedItem {
   fulfillment_details?: Record<string, any>;
   redeemed_at: string;
   updated_at: string;
+  currency?: string;
+  original_currency?: string;
+  original_points_cost?: number;
 }
 
 // Reward Store Items Types
@@ -444,6 +448,8 @@ export interface RewardStoreItem {
   stock_quantity?: number;
   created_at: string;
   updated_at: string;
+  original_currency?: string;
+  original_points_cost?: number;
 }
 
 // Commission Tier Types
@@ -484,12 +490,14 @@ export interface PayoutRequest {
   transaction_id?: string;
   created_at: string;
   updated_at: string;
+  currency?: string;
 }
 
 export interface PayoutRequestCreateRequest {
   amount: number;
   payout_method: string;
   payout_details?: Record<string, any>;
+  currency?: string;
 }
 
 export interface PayoutRequestUpdateRequest {
@@ -601,6 +609,7 @@ export interface PromotedPollCreateRequest {
   target_votes: number;
   start_date?: string;
   end_date?: string;
+  currency?: string;
 }
 
 export interface PromotedPollUpdateRequest {
@@ -619,6 +628,8 @@ export interface Transaction {
   promoted_poll_id?: string;
   amount: number;
   currency: string;
+  original_amount?: number;
+  original_currency?: string;
   payment_method: 'wallet' | 'stripe' | 'paypal' | 'paystack';
   payment_method_id?: string;
   gateway_transaction_id?: string;
@@ -626,6 +637,9 @@ export interface Transaction {
   metadata?: Record<string, any>;
   created_at: string;
   updated_at: string;
+  stripe_payment_intent_id?: string;
+  stripe_payment_method_id?: string;
+  stripe_customer_id?: string;
 }
 
 export interface TransactionCreateRequest {
@@ -645,4 +659,26 @@ export interface PaymentMethod {
   config?: Record<string, any>;
   created_at: string;
   updated_at: string;
+}
+
+// Currency and Exchange Rate Types
+export interface CurrencyExchangeRate {
+  id: string;
+  from_currency: string;
+  to_currency: string;
+  rate: number;
+  updated_at: string;
+}
+
+export interface CountryCurrencySettings {
+  id: string;
+  country_code: string;
+  enabled_currencies: string[];
+  default_currency: string;
+  updated_at: string;
+}
+
+export interface PaymentGatewaySettings {
+  default_gateways: string[];
+  country_gateways: Record<string, string[]>;
 }
