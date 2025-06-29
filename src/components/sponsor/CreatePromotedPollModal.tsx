@@ -326,6 +326,93 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
     
     setStep('payment');
   };
+
+  // New helper function to initiate payment flow
+  const initiatePaymentFlow = async (
+    promotedPollId: string,
+    paymentMethodType: string
+  ): Promise<boolean> => {
+    try {
+      // Process payment based on selected method
+      if (paymentMethodType === 'wallet') {
+        // Process wallet payment
+        const { error: paymentError } = await PaymentService.processWalletPayment(
+          user!.id,
+          formData.budget,
+          promotedPollId,
+          formData.currency
+        );
+        
+        if (paymentError) {
+          throw new Error(paymentError);
+        }
+        
+        successToast('Payment successful! Your poll promotion is pending approval.');
+        onSuccess();
+        onClose();
+        return true;
+      } else if (paymentMethodType === 'stripe') {
+        if (!stripeInstance || stripeLoadError) {
+          throw new Error('Stripe payment system is not available. Please contact support or use an alternative payment method.');
+        }
+        
+        // Initialize Stripe payment
+        const { data: stripeData, error: stripeError } = await PaymentService.initializeStripePayment(
+          user!.id,
+          formData.budget,
+          promotedPollId,
+          formData.currency
+        );
+        
+        if (stripeError) {
+          throw new Error(stripeError);
+        }
+        
+        if (!stripeData) {
+          throw new Error('Failed to initialize Stripe payment');
+        }
+        
+        // Set client secret and transaction ID for Stripe Elements
+        setClientSecret(stripeData.clientSecret);
+        setTransactionId(stripeData.transactionId);
+        
+        // Don't close modal yet - user needs to complete Stripe payment
+        return true;
+      } else if (paymentMethodType === 'paystack') {
+        // Initialize Paystack payment
+        const { data: paystackData, error: paystackError } = await PaymentService.initializePaystackPayment(
+          user!.id,
+          formData.budget,
+          promotedPollId,
+          formData.currency
+        );
+        
+        if (paystackError) {
+          throw new Error(paystackError);
+        }
+        
+        if (!paystackData || !paystackData.authorizationUrl) {
+          throw new Error('Failed to initialize Paystack payment');
+        }
+        
+        // Redirect to Paystack payment page
+        window.location.href = paystackData.authorizationUrl;
+        
+        // Don't close modal or show success message yet - user needs to complete Paystack payment
+        return true;
+      } else {
+        // For other payment methods (PayPal)
+        // This would be implemented similarly to Stripe
+        successToast('Your poll promotion has been created and is pending payment and approval.');
+        onSuccess();
+        onClose();
+        return true;
+      }
+    } catch (error) {
+      errorToast(error instanceof Error ? error.message : 'Failed to process payment');
+      return false;
+    }
+  };
   
   const handlePayment = async () => {
     if (!user || !selectedPollId || !sponsorId) {
@@ -358,91 +445,23 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         throw new Error('Failed to create promoted poll');
       }
       
-      // Process payment based on selected method
+      // Get the selected payment method
       const selectedMethod = paymentMethods.find(m => m.id === selectedPaymentMethod);
       
       if (!selectedMethod) {
         throw new Error('Invalid payment method');
       }
       
-      if (selectedMethod.type === 'stripe' && (!stripeInstance || stripeLoadError)) {
-        throw new Error('Stripe payment system is not available. Please contact support or use an alternative payment method.');
+      // Initiate payment flow
+      const paymentSuccess = await initiatePaymentFlow(promotedPoll.id, selectedMethod.type);
+      
+      if (!paymentSuccess) {
+        // If payment failed, we'll keep the modal open for the user to try again
+        setLoading(false);
       }
       
-      if (selectedMethod.type === 'wallet') {
-        // Process wallet payment
-        const { error: paymentError } = await PaymentService.processWalletPayment(
-          user.id,
-          formData.budget,
-          promotedPoll.id,
-          formData.currency
-        );
-        
-        if (paymentError) {
-          throw new Error(paymentError);
-        }
-        
-        successToast('Payment successful! Your poll promotion is pending approval.');
-        onSuccess();
-        onClose();
-      } else if (selectedMethod.type === 'stripe') {
-        if (!stripeInstance || stripeLoadError) {
-          throw new Error('Stripe payment system is not available. Please contact support or use an alternative payment method.');
-        }
-        
-        // Initialize Stripe payment
-        const { data: stripeData, error: stripeError } = await PaymentService.initializeStripePayment(
-          user.id,
-          formData.budget,
-          promotedPoll.id,
-          formData.currency
-        );
-        
-        if (stripeError) {
-          throw new Error(stripeError);
-        }
-        
-        if (!stripeData) {
-          throw new Error('Failed to initialize Stripe payment');
-        }
-        
-        // Set client secret and transaction ID for Stripe Elements
-        setClientSecret(stripeData.clientSecret);
-        setTransactionId(stripeData.transactionId);
-        
-        // Don't close modal yet - user needs to complete Stripe payment
-        setLoading(false);
-      } else if (selectedMethod.type === 'paystack') {
-        // Initialize Paystack payment
-        const { data: paystackData, error: paystackError } = await PaymentService.initializePaystackPayment(
-          user.id,
-          formData.budget,
-          promotedPoll.id,
-          formData.currency
-        );
-        
-        if (paystackError) {
-          throw new Error(paystackError);
-        }
-        
-        if (!paystackData || !paystackData.authorizationUrl) {
-          throw new Error('Failed to initialize Paystack payment');
-        }
-        
-        // Redirect to Paystack payment page
-        window.location.href = paystackData.authorizationUrl;
-        
-        // Don't close modal or show success message yet - user needs to complete Paystack payment
-        setLoading(false);
-      } else {
-        // For other payment methods (PayPal)
-        // This would be implemented similarly to Stripe
-        successToast('Your poll promotion has been created and is pending payment and approval.');
-        onSuccess();
-        onClose();
-      }
-    } catch (err) {
-      errorToast(err instanceof Error ? err.message : 'Failed to create promoted poll');
+    } catch (error) {
+      errorToast(error instanceof Error ? error.message : 'Failed to create promoted poll');
       setLoading(false);
     }
   };
@@ -1008,3 +1027,4 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
     </div>
   );
 };
+```
