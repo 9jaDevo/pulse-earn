@@ -25,15 +25,18 @@ import { useScrollToTop } from './hooks/useScrollToTop';
 import { useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/Toast';
 import { CookieConsentBanner } from './components/layout/CookieConsentBanner';
+import { useToast } from './hooks/useToast';
 
-// Component to handle referral codes from URL
+// Component to handle referral codes and payment redirects from URL
 const ReferralHandler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [searchParams] = useSearchParams();
+  const { successToast, errorToast } = useToast();
   
   // Auto-scroll to top on route changes
   useScrollToTop();
   
   React.useEffect(() => {
+    // Handle referral code
     const refCode = searchParams.get('ref');
     if (refCode) {
       // Store referral code in sessionStorage for use during signup
@@ -44,7 +47,40 @@ const ReferralHandler: React.FC<{ children: React.ReactNode }> = ({ children }) 
       newUrl.searchParams.delete('ref');
       window.history.replaceState({}, '', newUrl.toString());
     }
-  }, [searchParams]);
+    
+    // Handle payment redirect from Paystack
+    const paymentStatus = searchParams.get('payment_status');
+    const transactionId = searchParams.get('transaction_id');
+    const reference = searchParams.get('reference') || searchParams.get('trxref');
+    
+    if (paymentStatus === 'success' && (transactionId || reference)) {
+      // Show success toast
+      successToast('Payment successful! Your poll promotion is pending approval.');
+      
+      // Clean up URL parameters
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('payment_status');
+      newUrl.searchParams.delete('transaction_id');
+      if (reference) {
+        newUrl.searchParams.delete('reference');
+        newUrl.searchParams.delete('trxref');
+      }
+      window.history.replaceState({}, '', newUrl.toString());
+    } else if (paymentStatus === 'failed' && (transactionId || reference)) {
+      // Show error toast
+      errorToast('Payment failed. Please try again or contact support.');
+      
+      // Clean up URL parameters
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('payment_status');
+      newUrl.searchParams.delete('transaction_id');
+      if (reference) {
+        newUrl.searchParams.delete('reference');
+        newUrl.searchParams.delete('trxref');
+      }
+      window.history.replaceState({}, '', newUrl.toString());
+    }
+  }, [searchParams, successToast, errorToast]);
   
   return <>{children}</>;
 };
