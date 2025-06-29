@@ -281,20 +281,24 @@ export class PaymentService {
         .update(updateData)
         .eq('id', transactionId)
         .select()
-        .maybeSingle();
+        .limit(1);
       
       if (error) {
         return { data: null, error: error.message };
       }
       
-      if (!data) {
+      // Check if any rows were updated
+      if (!data || data.length === 0) {
         return { data: null, error: 'Transaction not found' };
       }
+      
+      // Return the first (and only) updated transaction
+      const updatedTransaction = data[0];
       
       // Note: We're removing the direct update to promoted_polls here
       // This will now be handled exclusively by the webhook functions
       
-      return { data, error: null };
+      return { data: updatedTransaction, error: null };
     } catch (error) {
       return {
         data: null,
