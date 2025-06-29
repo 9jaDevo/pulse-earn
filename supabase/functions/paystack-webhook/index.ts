@@ -85,12 +85,20 @@ serve(async (req) => {
       // Find the transaction by Paystack reference
       const { data: transactionData, error: transactionError } = await supabase
         .from("transactions")
-        .select("id, promoted_poll_id")
+        .select("id, promoted_poll_id, metadata")
         .eq("gateway_transaction_id", reference)
-        .single();
+        .maybeSingle();
       
       if (transactionError) {
         console.error("Error finding transaction:", transactionError);
+        return new Response(JSON.stringify({ error: transactionError.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (!transactionData) {
+        console.error("Transaction not found with reference:", reference);
         return new Response(JSON.stringify({ error: "Transaction not found" }), {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -154,12 +162,20 @@ serve(async (req) => {
       // Find the transaction by Paystack reference
       const { data: transactionData, error: transactionError } = await supabase
         .from("transactions")
-        .select("id, promoted_poll_id")
+        .select("id, promoted_poll_id, metadata")
         .eq("gateway_transaction_id", reference)
-        .single();
+        .maybeSingle();
       
       if (transactionError) {
         console.error("Error finding transaction:", transactionError);
+        return new Response(JSON.stringify({ error: transactionError.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (!transactionData) {
+        console.error("Transaction not found with reference:", reference);
         return new Response(JSON.stringify({ error: "Transaction not found" }), {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -52,23 +52,39 @@ serve(async (req) => {
       // Find the transaction by Stripe payment intent ID
       const { data: transactionData, error: transactionError } = await supabase
         .from("transactions")
-        .select("id, promoted_poll_id")
+        .select("id, promoted_poll_id, metadata")
         .eq("stripe_payment_intent_id", paymentIntent.id)
-        .single();
+        .maybeSingle();
       
       if (transactionError) {
         console.error("Error finding transaction:", transactionError);
+        return new Response(JSON.stringify({ error: transactionError.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (!transactionData) {
+        console.log("Transaction not found by payment intent ID, trying metadata lookup");
         
         // Try to find by metadata if direct lookup fails
         if (paymentIntent.metadata && paymentIntent.metadata.transaction_id) {
           const { data: metadataTransaction, error: metadataError } = await supabase
             .from("transactions")
-            .select("id, promoted_poll_id")
+            .select("id, promoted_poll_id, metadata")
             .eq("id", paymentIntent.metadata.transaction_id)
-            .single();
+            .maybeSingle();
           
           if (metadataError) {
             console.error("Error finding transaction by metadata:", metadataError);
+            return new Response(JSON.stringify({ error: metadataError.message }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          if (!metadataTransaction) {
+            console.error("Transaction not found by metadata either");
             return new Response(JSON.stringify({ error: "Transaction not found" }), {
               status: 404,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -127,6 +143,7 @@ serve(async (req) => {
           });
         }
         
+        console.error("Transaction not found and no metadata available");
         return new Response(JSON.stringify({ error: "Transaction not found" }), {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -189,23 +206,39 @@ serve(async (req) => {
       // Find the transaction by Stripe payment intent ID
       const { data: transactionData, error: transactionError } = await supabase
         .from("transactions")
-        .select("id, promoted_poll_id")
+        .select("id, promoted_poll_id, metadata")
         .eq("stripe_payment_intent_id", paymentIntent.id)
-        .single();
+        .maybeSingle();
       
       if (transactionError) {
         console.error("Error finding transaction:", transactionError);
+        return new Response(JSON.stringify({ error: transactionError.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (!transactionData) {
+        console.log("Transaction not found by payment intent ID, trying metadata lookup");
         
         // Try to find by metadata if direct lookup fails
         if (paymentIntent.metadata && paymentIntent.metadata.transaction_id) {
           const { data: metadataTransaction, error: metadataError } = await supabase
             .from("transactions")
-            .select("id, promoted_poll_id")
+            .select("id, promoted_poll_id, metadata")
             .eq("id", paymentIntent.metadata.transaction_id)
-            .single();
+            .maybeSingle();
           
           if (metadataError) {
             console.error("Error finding transaction by metadata:", metadataError);
+            return new Response(JSON.stringify({ error: metadataError.message }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          if (!metadataTransaction) {
+            console.error("Transaction not found by metadata either");
             return new Response(JSON.stringify({ error: "Transaction not found" }), {
               status: 404,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -265,6 +298,7 @@ serve(async (req) => {
           });
         }
         
+        console.error("Transaction not found and no metadata available");
         return new Response(JSON.stringify({ error: "Transaction not found" }), {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -327,12 +361,20 @@ serve(async (req) => {
       // Find the transaction by payment intent ID
       const { data: transactionData, error: transactionError } = await supabase
         .from("transactions")
-        .select("id, promoted_poll_id")
+        .select("id, promoted_poll_id, metadata")
         .eq("stripe_payment_intent_id", charge.payment_intent)
-        .single();
+        .maybeSingle();
       
       if (transactionError) {
         console.error("Error finding transaction:", transactionError);
+        return new Response(JSON.stringify({ error: transactionError.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (!transactionData) {
+        console.error("Transaction not found for refund");
         return new Response(JSON.stringify({ error: "Transaction not found" }), {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
