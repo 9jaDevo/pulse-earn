@@ -276,6 +276,7 @@ export class PaymentService {
         updateData.gateway_transaction_id = gatewayTransactionId;
       }
       
+      // Attempt to update the transaction
       const { data, error } = await supabase
         .from('transactions')
         .update(updateData)
@@ -290,6 +291,26 @@ export class PaymentService {
       
       // Check if any rows were updated
       if (!data || data.length === 0) {
+        // No rows were updated, which could mean the transaction was already processed by a webhook
+        // Let's check the current state of the transaction
+        const { data: existingTransaction, error: fetchError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('id', transactionId)
+          .maybeSingle();
+        
+        if (fetchError) {
+          return { data: null, error: fetchError.message };
+        }
+        
+        // If transaction exists and is already in a final state (completed, failed, refunded)
+        // then consider this a success - the webhook has already processed it
+        if (existingTransaction && ['completed', 'failed', 'refunded'].includes(existingTransaction.status)) {
+          console.log('Transaction already processed by webhook:', existingTransaction.status);
+          return { data: existingTransaction, error: null };
+        }
+        
+        // If we get here, the transaction truly wasn't found or is in an unexpected state
         return { data: null, error: 'Transaction not found' };
       }
       
