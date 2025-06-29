@@ -200,6 +200,37 @@ export const SponsorDashboard: React.FC = () => {
     }
   };
   
+  // Handler for deleting a promoted poll
+  const handleDeletePromotedPoll = async (poll: PromotedPoll) => {
+    if (!user) {
+      errorToast('You must be logged in to delete a promoted poll');
+      return;
+    }
+    
+    // Confirm with the user
+    if (!confirm('Are you sure you want to delete this promoted poll? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      const { data, error } = await PromotedPollService.deletePromotedPoll(user.id, poll.id);
+      
+      if (error) {
+        errorToast(error);
+        return;
+      }
+      
+      if (data) {
+        successToast('Promoted poll deleted successfully');
+        fetchPromotedPolls();
+      } else {
+        errorToast('Failed to delete promoted poll');
+      }
+    } catch (err) {
+      errorToast('Failed to delete promoted poll');
+    }
+  };
+  
   // Handler for pausing/resuming a promoted poll
   const handlePauseResume = async (poll: PromotedPoll) => {
     if (!user) return;
@@ -244,37 +275,6 @@ export const SponsorDashboard: React.FC = () => {
   const handleRetryPayment = (poll: PromotedPoll) => {
     setRetryingPaymentPoll(poll);
     setShowRetryPaymentModal(true);
-  };
-  
-  // Handler for deleting a promoted poll
-  const handleDeletePromotedPoll = async (poll: PromotedPoll) => {
-    if (!user) {
-      errorToast('You must be logged in to delete a promoted poll');
-      return;
-    }
-    
-    // Confirm with the user
-    if (!confirm('Are you sure you want to delete this promoted poll? This action cannot be undone.')) {
-      return;
-    }
-    
-    try {
-      const { data, error } = await PromotedPollService.deletePromotedPoll(user.id, poll.id);
-      
-      if (error) {
-        errorToast(error);
-        return;
-      }
-      
-      if (data) {
-        successToast('Promoted poll deleted successfully');
-        fetchPromotedPolls();
-      } else {
-        errorToast('Failed to delete promoted poll');
-      }
-    } catch (err) {
-      errorToast('Failed to delete promoted poll');
-    }
   };
   
   const getStatusBadgeColor = (status: string) => {
@@ -487,7 +487,7 @@ export const SponsorDashboard: React.FC = () => {
                               <Edit className="h-5 w-5" />
                             </button>
                           )}
-                          {poll.status === 'pending_approval' && (
+                          {(poll.status === 'pending_approval' || poll.status === 'rejected') && (
                             <button
                               onClick={() => handleDeletePromotedPoll(poll)}
                               className="p-2 text-error-600 hover:text-error-800 rounded-full hover:bg-error-50"
@@ -496,7 +496,7 @@ export const SponsorDashboard: React.FC = () => {
                               <Trash2 className="h-5 w-5" />
                             </button>
                           )}
-                          {(poll.payment_status === 'failed' || poll.payment_status === 'pending') && (
+                          {(poll.payment_status === 'failed' || poll.payment_status === 'pending') && poll.status !== 'rejected' && (
                             <button
                               onClick={() => handleRetryPayment(poll)}
                               className="p-2 text-primary-600 hover:text-primary-800 rounded-full hover:bg-primary-50"
@@ -596,7 +596,7 @@ export const SponsorDashboard: React.FC = () => {
                       )}
                       
                       {/* Payment Status Message */}
-                      {(poll.payment_status === 'failed' || poll.payment_status === 'pending') && (
+                      {(poll.payment_status === 'failed' || poll.payment_status === 'pending') && poll.status !== 'rejected' && (
                         <div className="bg-error-50 border border-error-200 rounded-lg p-3 flex items-start space-x-2 mt-4">
                           <AlertCircle className="h-5 w-5 text-error-600 flex-shrink-0 mt-0.5" />
                           <div>
@@ -646,7 +646,8 @@ export const SponsorDashboard: React.FC = () => {
             await handlePauseResume(selectedPromotedPoll);
           }}
           onRetryPayment={
-            (selectedPromotedPoll.payment_status === 'failed' || selectedPromotedPoll.payment_status === 'pending')
+            (selectedPromotedPoll.payment_status === 'failed' || selectedPromotedPoll.payment_status === 'pending') && 
+            selectedPromotedPoll.status !== 'rejected'
               ? () => handleRetryPayment(selectedPromotedPoll)
               : undefined
           }
