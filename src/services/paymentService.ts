@@ -129,21 +129,8 @@ export class PaymentService {
         return { data: null, error: transactionError.message };
       }
       
-      // 3. If this is for a promoted poll, update its payment status
-      if (promotedPollId) {
-        const { error: updateError } = await supabase
-          .from('promoted_polls')
-          .update({
-            payment_status: 'paid',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', promotedPollId);
-        
-        if (updateError) {
-          console.error('Failed to update promoted poll payment status:', updateError);
-          // Continue even if update fails, as the payment was successful
-        }
-      }
+      // Note: We're removing the direct update to promoted_polls here
+      // This will now be handled exclusively by the webhook functions
       
       return { data: transaction, error: null };
     } catch (error) {
@@ -218,21 +205,8 @@ export class PaymentService {
         return { data: null, error: error.message };
       }
       
-      // If transaction is for a promoted poll and status is completed, update the poll's payment status
-      if (data.promoted_poll_id && status === 'completed') {
-        const { error: updateError } = await supabase
-          .from('promoted_polls')
-          .update({
-            payment_status: 'paid',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', data.promoted_poll_id);
-        
-        if (updateError) {
-          console.error('Failed to update promoted poll payment status:', updateError);
-          // Continue even if update fails, as the payment was successful
-        }
-      }
+      // Note: We're removing the direct update to promoted_polls here
+      // This will now be handled exclusively by the webhook functions
       
       return { data, error: null };
     } catch (error) {

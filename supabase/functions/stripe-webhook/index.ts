@@ -29,6 +29,7 @@ serve(async (req) => {
     const signature = req.headers.get("stripe-signature");
 
     if (!signature) {
+      console.error("Missing Stripe signature");
       return new Response(JSON.stringify({ error: "Missing Stripe signature" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -41,25 +42,141 @@ serve(async (req) => {
     
     // Parse the event data
     const event = JSON.parse(body);
+    console.log("Received Stripe webhook event:", event.type);
     
     // Handle the event
     if (event.type === "payment_intent.succeeded") {
       const paymentIntent = event.data.object;
+      console.log("Processing successful payment intent:", paymentIntent.id);
       
-      // Call the database function to handle the payment success
-      const { data, error } = await supabase.rpc("handle_stripe_webhook_event", {
-        p_event_type: event.type,
-        p_payment_intent_id: paymentIntent.id,
-        p_payment_status: "succeeded",
-        p_metadata: paymentIntent.metadata || {}
-      });
+      // Find the transaction by Stripe payment intent ID
+      const { data: transactionData, error: transactionError } = await supabase
+        .from("transactions")
+        .select("id, promoted_poll_id")
+        .eq("stripe_payment_intent_id", paymentIntent.id)
+        .single();
       
-      if (error) {
-        console.error("Error handling payment success:", error);
-        return new Response(JSON.stringify({ error: error.message }), {
+      if (transactionError) {
+        console.error("Error finding transaction:", transactionError);
+        
+        // Try to find by metadata if direct lookup fails
+        if (paymentIntent.metadata && paymentIntent.metadata.transaction_id) {
+          const { data: metadataTransaction, error: metadataError } = await supabase
+            .from("transactions")
+            .select("id, promoted_poll_id")
+            .eq("id", paymentIntent.metadata.transaction_id)
+            .single();
+          
+          if (metadataError) {
+            console.error("Error finding transaction by metadata:", metadataError);
+            return new Response(JSON.stringify({ error: "Transaction not found" }), {
+              status: 404,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          console.log("Found transaction by metadata:", metadataTransaction);
+          
+          // Update transaction status
+          const { error: updateError } = await supabase
+            .from("transactions")
+            .update({
+              status: "completed",
+              updated_at: new Date().toISOString(),
+              stripe_payment_intent_id: paymentIntent.id,
+              metadata: {
+                ...metadataTransaction.metadata,
+                stripe_event: event.type,
+                payment_intent_id: paymentIntent.id
+              }
+            })
+            .eq("id", metadataTransaction.id);
+          
+          if (updateError) {
+            console.error("Error updating transaction:", updateError);
+            return new Response(JSON.stringify({ error: updateError.message }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          console.log("Transaction updated successfully");
+          
+          // If transaction is for a promoted poll, update its payment status
+          if (metadataTransaction.promoted_poll_id) {
+            console.log("Updating promoted poll payment status for poll:", metadataTransaction.promoted_poll_id);
+            
+            const { error: pollUpdateError } = await supabase
+              .from("promoted_polls")
+              .update({
+                payment_status: "paid",
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", metadataTransaction.promoted_poll_id);
+            
+            if (pollUpdateError) {
+              console.error("Error updating promoted poll:", pollUpdateError);
+              // Continue anyway, as the transaction was updated successfully
+            } else {
+              console.log("Promoted poll payment status updated to 'paid'");
+            }
+          }
+          
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        return new Response(JSON.stringify({ error: "Transaction not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      console.log("Found transaction:", transactionData);
+      
+      // Update transaction status
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update({
+          status: "completed",
+          updated_at: new Date().toISOString(),
+          metadata: {
+            ...transactionData.metadata,
+            stripe_event: event.type,
+            payment_intent_id: paymentIntent.id
+          }
+        })
+        .eq("id", transactionData.id);
+      
+      if (updateError) {
+        console.error("Error updating transaction:", updateError);
+        return new Response(JSON.stringify({ error: updateError.message }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+      
+      console.log("Transaction updated successfully");
+      
+      // If transaction is for a promoted poll, update its payment status
+      if (transactionData.promoted_poll_id) {
+        console.log("Updating promoted poll payment status for poll:", transactionData.promoted_poll_id);
+        
+        const { error: pollUpdateError } = await supabase
+          .from("promoted_polls")
+          .update({
+            payment_status: "paid",
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", transactionData.promoted_poll_id);
+        
+        if (pollUpdateError) {
+          console.error("Error updating promoted poll:", pollUpdateError);
+          // Continue anyway, as the transaction was updated successfully
+        } else {
+          console.log("Promoted poll payment status updated to 'paid'");
+        }
       }
       
       return new Response(JSON.stringify({ success: true }), {
@@ -67,23 +184,137 @@ serve(async (req) => {
       });
     } else if (event.type === "payment_intent.payment_failed") {
       const paymentIntent = event.data.object;
+      console.log("Processing failed payment intent:", paymentIntent.id);
       
-      // Call the database function to handle the payment failure
-      const { data, error } = await supabase.rpc("handle_stripe_webhook_event", {
-        p_event_type: event.type,
-        p_payment_intent_id: paymentIntent.id,
-        p_payment_status: "failed",
-        p_metadata: {
-          last_payment_error: paymentIntent.last_payment_error || {}
+      // Find the transaction by Stripe payment intent ID
+      const { data: transactionData, error: transactionError } = await supabase
+        .from("transactions")
+        .select("id, promoted_poll_id")
+        .eq("stripe_payment_intent_id", paymentIntent.id)
+        .single();
+      
+      if (transactionError) {
+        console.error("Error finding transaction:", transactionError);
+        
+        // Try to find by metadata if direct lookup fails
+        if (paymentIntent.metadata && paymentIntent.metadata.transaction_id) {
+          const { data: metadataTransaction, error: metadataError } = await supabase
+            .from("transactions")
+            .select("id, promoted_poll_id")
+            .eq("id", paymentIntent.metadata.transaction_id)
+            .single();
+          
+          if (metadataError) {
+            console.error("Error finding transaction by metadata:", metadataError);
+            return new Response(JSON.stringify({ error: "Transaction not found" }), {
+              status: 404,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          console.log("Found transaction by metadata:", metadataTransaction);
+          
+          // Update transaction status
+          const { error: updateError } = await supabase
+            .from("transactions")
+            .update({
+              status: "failed",
+              updated_at: new Date().toISOString(),
+              stripe_payment_intent_id: paymentIntent.id,
+              metadata: {
+                ...metadataTransaction.metadata,
+                stripe_event: event.type,
+                payment_intent_id: paymentIntent.id,
+                failure_reason: paymentIntent.last_payment_error?.message || "Payment failed"
+              }
+            })
+            .eq("id", metadataTransaction.id);
+          
+          if (updateError) {
+            console.error("Error updating transaction:", updateError);
+            return new Response(JSON.stringify({ error: updateError.message }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          console.log("Transaction updated successfully");
+          
+          // If transaction is for a promoted poll, update its payment status
+          if (metadataTransaction.promoted_poll_id) {
+            console.log("Updating promoted poll payment status for poll:", metadataTransaction.promoted_poll_id);
+            
+            const { error: pollUpdateError } = await supabase
+              .from("promoted_polls")
+              .update({
+                payment_status: "failed",
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", metadataTransaction.promoted_poll_id);
+            
+            if (pollUpdateError) {
+              console.error("Error updating promoted poll:", pollUpdateError);
+              // Continue anyway, as the transaction was updated successfully
+            } else {
+              console.log("Promoted poll payment status updated to 'failed'");
+            }
+          }
+          
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
-      });
+        
+        return new Response(JSON.stringify({ error: "Transaction not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       
-      if (error) {
-        console.error("Error handling payment failure:", error);
-        return new Response(JSON.stringify({ error: error.message }), {
+      console.log("Found transaction:", transactionData);
+      
+      // Update transaction status
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update({
+          status: "failed",
+          updated_at: new Date().toISOString(),
+          metadata: {
+            ...transactionData.metadata,
+            stripe_event: event.type,
+            failure_reason: paymentIntent.last_payment_error?.message || "Payment failed"
+          }
+        })
+        .eq("id", transactionData.id);
+      
+      if (updateError) {
+        console.error("Error updating transaction:", updateError);
+        return new Response(JSON.stringify({ error: updateError.message }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+      
+      console.log("Transaction updated successfully");
+      
+      // If transaction is for a promoted poll, update its payment status
+      if (transactionData.promoted_poll_id) {
+        console.log("Updating promoted poll payment status for poll:", transactionData.promoted_poll_id);
+        
+        const { error: pollUpdateError } = await supabase
+          .from("promoted_polls")
+          .update({
+            payment_status: "failed",
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", transactionData.promoted_poll_id);
+        
+        if (pollUpdateError) {
+          console.error("Error updating promoted poll:", pollUpdateError);
+          // Continue anyway, as the transaction was updated successfully
+        } else {
+          console.log("Promoted poll payment status updated to 'failed'");
+        }
       }
       
       return new Response(JSON.stringify({ success: true }), {
@@ -91,21 +322,67 @@ serve(async (req) => {
       });
     } else if (event.type === "charge.refunded") {
       const charge = event.data.object;
+      console.log("Processing refund for charge:", charge.id);
       
-      // Call the database function to handle the refund
-      const { data, error } = await supabase.rpc("handle_stripe_webhook_event", {
-        p_event_type: event.type,
-        p_payment_intent_id: charge.payment_intent,
-        p_payment_status: "refunded",
-        p_metadata: charge.metadata || {}
-      });
+      // Find the transaction by payment intent ID
+      const { data: transactionData, error: transactionError } = await supabase
+        .from("transactions")
+        .select("id, promoted_poll_id")
+        .eq("stripe_payment_intent_id", charge.payment_intent)
+        .single();
       
-      if (error) {
-        console.error("Error handling refund:", error);
-        return new Response(JSON.stringify({ error: error.message }), {
+      if (transactionError) {
+        console.error("Error finding transaction:", transactionError);
+        return new Response(JSON.stringify({ error: "Transaction not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      console.log("Found transaction:", transactionData);
+      
+      // Update transaction status
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update({
+          status: "refunded",
+          updated_at: new Date().toISOString(),
+          metadata: {
+            ...transactionData.metadata,
+            stripe_event: event.type,
+            refund_id: charge.refunds.data[0]?.id
+          }
+        })
+        .eq("id", transactionData.id);
+      
+      if (updateError) {
+        console.error("Error updating transaction:", updateError);
+        return new Response(JSON.stringify({ error: updateError.message }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+      
+      console.log("Transaction updated successfully");
+      
+      // If transaction is for a promoted poll, update its payment status
+      if (transactionData.promoted_poll_id) {
+        console.log("Updating promoted poll payment status for poll:", transactionData.promoted_poll_id);
+        
+        const { error: pollUpdateError } = await supabase
+          .from("promoted_polls")
+          .update({
+            payment_status: "refunded",
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", transactionData.promoted_poll_id);
+        
+        if (pollUpdateError) {
+          console.error("Error updating promoted poll:", pollUpdateError);
+          // Continue anyway, as the transaction was updated successfully
+        } else {
+          console.log("Promoted poll payment status updated to 'refunded'");
+        }
       }
       
       return new Response(JSON.stringify({ success: true }), {

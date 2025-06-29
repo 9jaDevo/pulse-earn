@@ -30,6 +30,7 @@ serve(async (req) => {
     const signature = req.headers.get("x-paystack-signature");
 
     if (!signature) {
+      console.error("Missing Paystack signature");
       return new Response(JSON.stringify({ error: "Missing Paystack signature" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -64,6 +65,7 @@ serve(async (req) => {
     
     // Compare the computed signature with the one from the request
     if (signatureHex !== signature) {
+      console.error("Invalid signature");
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -72,11 +74,13 @@ serve(async (req) => {
     
     // Parse the event data
     const event = JSON.parse(body);
+    console.log("Received Paystack webhook event:", event.event);
     
     // Handle the event
     if (event.event === "charge.success") {
       const transaction = event.data;
       const reference = transaction.reference;
+      console.log("Processing successful charge with reference:", reference);
       
       // Find the transaction by Paystack reference
       const { data: transactionData, error: transactionError } = await supabase
@@ -92,6 +96,8 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      
+      console.log("Found transaction:", transactionData);
       
       // Update transaction status
       const { error: updateError } = await supabase
@@ -115,8 +121,12 @@ serve(async (req) => {
         });
       }
       
+      console.log("Transaction updated successfully");
+      
       // If transaction is for a promoted poll, update its payment status
       if (transactionData.promoted_poll_id) {
+        console.log("Updating promoted poll payment status for poll:", transactionData.promoted_poll_id);
+        
         const { error: pollUpdateError } = await supabase
           .from("promoted_polls")
           .update({
@@ -128,6 +138,8 @@ serve(async (req) => {
         if (pollUpdateError) {
           console.error("Error updating promoted poll:", pollUpdateError);
           // Continue anyway, as the transaction was updated successfully
+        } else {
+          console.log("Promoted poll payment status updated to 'paid'");
         }
       }
       
@@ -137,11 +149,12 @@ serve(async (req) => {
     } else if (event.event === "charge.failed") {
       const transaction = event.data;
       const reference = transaction.reference;
+      console.log("Processing failed charge with reference:", reference);
       
       // Find the transaction by Paystack reference
       const { data: transactionData, error: transactionError } = await supabase
         .from("transactions")
-        .select("id")
+        .select("id, promoted_poll_id")
         .eq("gateway_transaction_id", reference)
         .single();
       
@@ -152,6 +165,8 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      
+      console.log("Found transaction:", transactionData);
       
       // Update transaction status
       const { error: updateError } = await supabase
@@ -173,6 +188,28 @@ serve(async (req) => {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+      
+      console.log("Transaction updated successfully");
+      
+      // If transaction is for a promoted poll, update its payment status
+      if (transactionData.promoted_poll_id) {
+        console.log("Updating promoted poll payment status for poll:", transactionData.promoted_poll_id);
+        
+        const { error: pollUpdateError } = await supabase
+          .from("promoted_polls")
+          .update({
+            payment_status: "failed",
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", transactionData.promoted_poll_id);
+        
+        if (pollUpdateError) {
+          console.error("Error updating promoted poll:", pollUpdateError);
+          // Continue anyway, as the transaction was updated successfully
+        } else {
+          console.log("Promoted poll payment status updated to 'failed'");
+        }
       }
       
       return new Response(JSON.stringify({ success: true }), {
