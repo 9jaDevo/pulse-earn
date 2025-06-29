@@ -5,24 +5,30 @@ import {
   useElements 
 } from '@stripe/react-stripe-js';
 import { RefreshCw, CreditCard, AlertCircle } from 'lucide-react';
+import getSymbolFromCurrency from 'currency-symbol-map';
 
 interface StripePaymentFormProps {
   amount: number;
   transactionId: string;
   onSuccess: (paymentIntentId: string) => void;
   onError: (error: string) => void;
+  currency?: string;
 }
 
 export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
   amount,
   transactionId,
   onSuccess,
-  onError
+  onError,
+  currency = 'USD'
 }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // Get currency symbol
+  const currencySymbol = getSymbolFromCurrency(currency) || '$';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +92,7 @@ export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
         <h4 className="font-medium text-gray-900 mb-3">Payment Summary</h4>
         <div className="flex justify-between">
           <span className="text-gray-600">Total Amount:</span>
-          <span className="font-bold text-gray-900">${amount.toFixed(2)}</span>
+          <span className="font-bold text-gray-900">{currencySymbol}{amount.toFixed(2)} {currency}</span>
         </div>
       </div>
 
@@ -104,7 +110,7 @@ export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
         ) : (
           <>
             <CreditCard className="h-5 w-5" />
-            <span>Pay ${amount.toFixed(2)}</span>
+            <span>Pay {currencySymbol}{amount.toFixed(2)}</span>
           </>
         )}
       </button>

@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { PayoutService } from '../../services/payoutService';
 import { useToast } from '../../hooks/useToast';
 import type { PayoutMethod } from '../../types/api';
+import getSymbolFromCurrency from 'currency-symbol-map';
 
 interface PayoutSettingsFormProps {
   onSaved?: () => void;
@@ -15,6 +16,7 @@ export const PayoutSettingsForm: React.FC<PayoutSettingsFormProps> = ({ onSaved 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [payoutMethods, setPayoutMethods] = useState<PayoutMethod[]>([]);
+  const [availablePayoutMethods, setAvailablePayoutMethods] = useState<PayoutMethod[]>([]);
   
   // Form state
   const [selectedMethod, setSelectedMethod] = useState<string>('');
@@ -40,7 +42,7 @@ export const PayoutSettingsForm: React.FC<PayoutSettingsFormProps> = ({ onSaved 
     const loadData = async () => {
       setLoading(true);
       try {
-        // Load payout methods
+        // Load all payout methods
         const { data, error } = await PayoutService.getPayoutMethods();
         
         if (error) {
@@ -49,6 +51,18 @@ export const PayoutSettingsForm: React.FC<PayoutSettingsFormProps> = ({ onSaved 
         }
         
         setPayoutMethods(data || []);
+        
+        // Get available payout methods for user's country and currency
+        if (profile) {
+          const { data: availableMethods } = await PayoutService.getAvailablePaymentMethods(
+            profile.country,
+            profile.currency
+          );
+          
+          setAvailablePayoutMethods(availableMethods || data || []);
+        } else {
+          setAvailablePayoutMethods(data || []);
+        }
         
         // Set initial values from profile
         if (profile) {
@@ -147,6 +161,12 @@ export const PayoutSettingsForm: React.FC<PayoutSettingsFormProps> = ({ onSaved 
           <p className="text-blue-700 text-sm">
             Set up your preferred payout method to receive your ambassador earnings. 
             We'll use this information to process your payout requests.
+            {profile?.currency && (
+              <span className="block mt-1">
+                Your preferred currency is {profile.currency} {getSymbolFromCurrency(profile.currency)}. 
+                Payouts will be processed in this currency when possible.
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -156,7 +176,7 @@ export const PayoutSettingsForm: React.FC<PayoutSettingsFormProps> = ({ onSaved 
           Payout Method *
         </label>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {payoutMethods.map((method) => (
+          {availablePayoutMethods.map((method) => (
             <div 
               key={method.id}
               onClick={() => setSelectedMethod(method.name)}
@@ -182,14 +202,28 @@ export const PayoutSettingsForm: React.FC<PayoutSettingsFormProps> = ({ onSaved 
               
               {method.config?.min_payout && (
                 <div className="mt-2 text-xs text-gray-500">
-                  Minimum: ${method.config.min_payout}
+                  Minimum: {profile?.currency ? getSymbolFromCurrency(profile.currency) : '$'}{method.config.min_payout}
                 </div>
               )}
               
               {(method.config?.fee_percentage > 0 || method.config?.fee_fixed > 0) && (
                 <div className="mt-1 text-xs text-gray-500">
                   Fee: {method.config.fee_percentage > 0 ? `${method.config.fee_percentage}% + ` : ''}
-                  {method.config.fee_fixed > 0 ? `$${method.config.fee_fixed}` : ''}
+                  {method.config.fee_fixed > 0 ? `${profile?.currency ? getSymbolFromCurrency(profile.currency) : '$'}${method.config.fee_fixed}` : ''}
+                </div>
+              )}
+              
+              {method.config?.supported_currencies && (
+                <div className="mt-1 text-xs text-gray-500">
+                  {profile?.currency && !method.config.supported_currencies.includes(profile.currency) ? (
+                    <span className="text-error-600">
+                      Does not support {profile.currency}
+                    </span>
+                  ) : (
+                    <span>
+                      Supports {profile?.currency || 'your currency'}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -308,6 +342,11 @@ export const PayoutSettingsForm: React.FC<PayoutSettingsFormProps> = ({ onSaved 
             <div>
               <p className="text-yellow-700 text-sm">
                 Please ensure your bank details are accurate. Incorrect information may result in failed transfers or additional fees.
+                {profile?.currency && profile.currency !== 'USD' && (
+                  <span className="block mt-1">
+                    Your preferred currency is {profile.currency}. Bank transfers may be subject to currency conversion fees.
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -320,6 +359,11 @@ export const PayoutSettingsForm: React.FC<PayoutSettingsFormProps> = ({ onSaved 
           <p className="text-gray-700">
             Manual payouts are processed by our team on a case-by-case basis. 
             When you request a payout, our team will contact you to arrange the details.
+            {profile?.currency && profile.currency !== 'USD' && (
+              <span className="block mt-2">
+                Your preferred currency is {profile.currency}. We'll try to accommodate this currency for manual payouts when possible.
+              </span>
+            )}
           </p>
         </div>
       )}

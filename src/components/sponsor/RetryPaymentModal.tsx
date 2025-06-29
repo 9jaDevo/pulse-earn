@@ -6,16 +6,19 @@ import {
   DollarSign, 
   RefreshCw,
   AlertCircle,
-  Info
+  Info,
+  Globe
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PromotedPollService } from '../../services/promotedPollService';
 import { PaymentService } from '../../services/paymentService';
+import { SettingsService } from '../../services/settingsService';
 import { useToast } from '../../hooks/useToast';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { StripePaymentForm } from './StripePaymentForm';
 import type { PromotedPoll, PaymentMethod } from '../../types/api';
+import getSymbolFromCurrency from 'currency-symbol-map';
 
 // Initialize Stripe outside of component to avoid re-initialization
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
@@ -39,16 +42,25 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>(['USD']);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(true);
   
   // Stripe payment state
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState<string | null>(null);
   
-  // Load payment methods
+  // Get the poll currency or default to USD
+  const pollCurrency = promotedPoll.currency || 'USD';
+  const currencySymbol = getSymbolFromCurrency(pollCurrency) || '$';
+  
   useEffect(() => {
+    // Fetch available payment methods for the poll's currency
     const fetchPaymentMethods = async () => {
       try {
-        const { data, error } = await PaymentService.getPaymentMethods();
+        const { data, error } = await PaymentService.getAvailablePaymentMethods(
+          profile?.country,
+          pollCurrency
+        );
         
         if (error) {
           errorToast(error);
@@ -69,9 +81,29 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
       }
     };
     
-    fetchPaymentMethods();
-  }, []);
-  
+    // Fetch supported currencies
+    const fetchCurrencies = async () => {
+      setLoadingCurrencies(true);
+      try {
+        const { data, error } = await SettingsService.getSupportedCurrencies();
+        if (error) {
+          console.error('Error fetching currencies:', error);
+        } else {
+          setSupportedCurrencies(data || ['USD']);
+        }
+      } catch (err) {
+        console.error('Failed to fetch currencies:', err);
+      } finally {
+        setLoadingCurrencies(false);
+      }
+    };
+    
+    if (isOpen) {
+      fetchPaymentMethods();
+      fetchCurrencies();
+    }
+  }, [isOpen, profile, pollCurrency]);
+
   const handleRetryPayment = async () => {
     if (!user) {
       errorToast('You must be logged in to perform this action');
@@ -188,6 +220,11 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
             <h3 className="font-medium text-blue-800 mb-1">Complete Your Payment</h3>
             <p className="text-blue-700 text-sm">
               Your previous payment attempt for this campaign was not completed. Please select a payment method below to complete your payment.
+              {pollCurrency !== 'USD' && (
+                <span className="block mt-1">
+                  This payment will be processed in {pollCurrency} ({currencySymbol}).
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -202,7 +239,7 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
             </div>
             <div>
               <p className="text-sm text-gray-500">Amount</p>
-              <p className="font-medium text-gray-900">${promotedPoll.budget_amount.toFixed(2)}</p>
+              <p className="font-medium text-gray-900">{currencySymbol}{promotedPoll.budget_amount.toFixed(2)} {pollCurrency}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Target Votes</p>
@@ -259,6 +296,21 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
                         </span>
                       </div>
                     )}
+                    
+                    {/* Show currency support info */}
+                    {method.config?.supported_currencies && (
+                      <div className="mt-1 text-sm">
+                        {method.config.supported_currencies.includes(pollCurrency) ? (
+                          <span className="text-success-600">
+                            Supports {pollCurrency}
+                          </span>
+                        ) : (
+                          <span className="text-error-600">
+                            Does not support {pollCurrency} - payment will be converted to {method.config.default_currency || 'USD'}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -270,7 +322,7 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Promotion Budget:</span>
-                  <span className="font-medium">${promotedPoll.budget_amount.toFixed(2)}</span>
+                  <span className="font-medium">{currencySymbol}{promotedPoll.budget_amount.toFixed(2)} {pollCurrency}</span>
                 </div>
                 
                 {/* If wallet payment, show points conversion */}
@@ -286,17 +338,37 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
                 <div className="pt-2 border-t border-gray-200 mt-2">
                   <div className="flex justify-between">
                     <span className="text-gray-800 font-medium">Total:</span>
-                    <span className="font-bold text-gray-900">${promotedPoll.budget_amount.toFixed(2)}</span>
+                    <span className="font-bold text-gray-900">{currencySymbol}{promotedPoll.budget_amount.toFixed(2)} {pollCurrency}</span>
                   </div>
                 </div>
               </div>
             </div>
             
+            {/* Insufficient Points Warning */}
+            {selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && 
+             profile && 
+             profile.points < (promotedPoll.budget_amount * 100) && (
+              <div className="bg-error-50 border border-error-200 rounded-lg p-4 flex items-start space-x-3 mt-4">
+                <AlertCircle className="h-5 w-5 text-error-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-medium text-error-800 mb-1">Insufficient Points</h3>
+                  <p className="text-error-700 text-sm">
+                    You don't have enough points for this payment. You need {(promotedPoll.budget_amount * 100).toLocaleString()} points, 
+                    but you only have {profile.points.toLocaleString()} points. Please select a different payment method.
+                  </p>
+                </div>
+              </div>
+            )}
+            
             {/* Submit Button */}
             <div className="mt-6">
               <button
                 onClick={handleRetryPayment}
-                disabled={loading || !selectedPaymentMethod}
+                disabled={loading || !selectedPaymentMethod || (
+                  selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && 
+                  profile && 
+                  profile.points < (promotedPoll.budget_amount * 100)
+                )}
                 className="w-full bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
                 {loading ? (
@@ -324,6 +396,7 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
                 transactionId={transactionId || ''}
                 onSuccess={handleStripePaymentSuccess}
                 onError={handleStripePaymentError}
+                currency={pollCurrency}
               />
             </Elements>
           </div>

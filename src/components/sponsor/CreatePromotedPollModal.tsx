@@ -9,17 +9,20 @@ import {
   AlertCircle, 
   CreditCard, 
   Wallet, 
-  RefreshCw 
+  RefreshCw,
+  Globe
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PollService } from '../../services/pollService';
 import { PromotedPollService } from '../../services/promotedPollService';
 import { PaymentService } from '../../services/paymentService';
+import { SettingsService } from '../../services/settingsService';
 import { useToast } from '../../hooks/useToast';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { StripePaymentForm } from './StripePaymentForm';
 import type { Poll, PaymentMethod } from '../../types/api';
+import getSymbolFromCurrency from 'currency-symbol-map';
 
 // Initialize Stripe outside of component to avoid re-initialization
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
@@ -47,6 +50,8 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>(['USD']);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(true);
   
   // Stripe payment state
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -70,7 +75,8 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
     budget: 50,
     targetVotes: 1000,
     startDate: '',
-    endDate: ''
+    endDate: '',
+    currency: 'USD'
   });
   
   // Load user's polls and payment methods
@@ -79,6 +85,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
       fetchUserPolls();
       fetchPaymentMethods();
       fetchSettings();
+      fetchSupportedCurrencies();
     }
   }, [user]);
   
@@ -89,6 +96,20 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
       setFormData(prev => ({ ...prev, targetVotes }));
     }
   }, [formData.budget, settings.default_cost_per_vote]);
+  
+  // Set default currency from user profile
+  useEffect(() => {
+    if (profile?.currency) {
+      setFormData(prev => ({ ...prev, currency: profile.currency }));
+    }
+  }, [profile]);
+  
+  // Update available payment methods when currency changes
+  useEffect(() => {
+    if (user && formData.currency) {
+      fetchPaymentMethodsForCurrency(formData.currency);
+    }
+  }, [user, formData.currency]);
   
   const fetchUserPolls = async () => {
     if (!user) return;
@@ -108,6 +129,22 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
       errorToast('Failed to load your polls');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const fetchSupportedCurrencies = async () => {
+    setLoadingCurrencies(true);
+    try {
+      const { data, error } = await SettingsService.getSupportedCurrencies();
+      if (error) {
+        console.error('Error fetching currencies:', error);
+      } else {
+        setSupportedCurrencies(data || ['USD']);
+      }
+    } catch (err) {
+      console.error('Failed to fetch currencies:', err);
+    } finally {
+      setLoadingCurrencies(false);
     }
   };
   
@@ -131,6 +168,34 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
       }
     } catch (err) {
       errorToast('Failed to load payment methods');
+    }
+  };
+  
+  const fetchPaymentMethodsForCurrency = async (currency: string) => {
+    try {
+      const { data, error } = await PaymentService.getAvailablePaymentMethods(
+        profile?.country,
+        currency
+      );
+      
+      if (error) {
+        errorToast(error);
+        return;
+      }
+      
+      setPaymentMethods(data || []);
+      
+      // Reset selected payment method if it's no longer available
+      if (data && selectedPaymentMethod) {
+        const methodStillAvailable = data.some(m => m.id === selectedPaymentMethod);
+        if (!methodStillAvailable && data.length > 0) {
+          // Default to wallet if available
+          const walletMethod = data.find(m => m.type === 'wallet');
+          setSelectedPaymentMethod(walletMethod ? walletMethod.id : data[0].id);
+        }
+      }
+    } catch (err) {
+      errorToast('Failed to load payment methods for selected currency');
     }
   };
   
@@ -211,7 +276,8 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
           budget_amount: formData.budget,
           target_votes: formData.targetVotes,
           start_date: formData.startDate || undefined,
-          end_date: formData.endDate || undefined
+          end_date: formData.endDate || undefined,
+          currency: formData.currency
         }
       );
       
@@ -235,7 +301,8 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         const { error: paymentError } = await PaymentService.processWalletPayment(
           user.id,
           formData.budget,
-          promotedPoll.id
+          promotedPoll.id,
+          formData.currency
         );
         
         if (paymentError) {
@@ -250,7 +317,8 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         const { data: stripeData, error: stripeError } = await PaymentService.initializeStripePayment(
           user.id,
           formData.budget,
-          promotedPoll.id
+          promotedPoll.id,
+          formData.currency
         );
         
         if (stripeError) {
@@ -272,7 +340,8 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         const { data: paystackData, error: paystackError } = await PaymentService.initializePaystackPayment(
           user.id,
           formData.budget,
-          promotedPoll.id
+          promotedPoll.id,
+          formData.currency
         );
         
         if (paystackError) {
@@ -337,6 +406,9 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
     poll.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (poll.description && poll.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+  
+  // Get currency symbol
+  const currencySymbol = getSymbolFromCurrency(formData.currency) || '$';
   
   if (!isOpen) return null;
   
@@ -466,10 +538,43 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
               <div>
                 <h3 className="font-medium text-blue-800 mb-1">How Promotion Works</h3>
                 <p className="text-blue-700 text-sm">
-                  You'll be charged ${settings.default_cost_per_vote.toFixed(2)} per vote your poll receives. 
+                  You'll be charged {currencySymbol}{settings.default_cost_per_vote.toFixed(2)} per vote your poll receives. 
                   Set your budget and we'll promote your poll until you reach your target votes or your budget is spent.
                 </p>
               </div>
+            </div>
+            
+            {/* Currency Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Currency *
+              </label>
+              <div className="relative">
+                <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <select
+                  value={formData.currency}
+                  onChange={(e) => setFormData(prev => ({ ...prev, currency: e.target.value }))}
+                  className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none"
+                >
+                  {loadingCurrencies ? (
+                    <option value="USD">Loading currencies...</option>
+                  ) : (
+                    supportedCurrencies.map(curr => (
+                      <option key={curr} value={curr}>
+                        {curr} {getSymbolFromCurrency(curr) || ''}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Select the currency you want to use for this promotion
+              </p>
             </div>
             
             {/* Budget Slider */}
@@ -500,8 +605,8 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                 </div>
               </div>
               <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>${settings.minimum_budget}</span>
-                <span>${settings.maximum_budget}</span>
+                <span>{currencySymbol}{settings.minimum_budget}</span>
+                <span>{currencySymbol}{settings.maximum_budget}</span>
               </div>
             </div>
             
@@ -520,7 +625,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Based on ${settings.default_cost_per_vote.toFixed(2)} per vote
+                Based on {currencySymbol}{settings.default_cost_per_vote.toFixed(2)} per vote
               </p>
             </div>
             
@@ -565,11 +670,11 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Budget:</span>
-                  <span className="font-medium">${formData.budget.toFixed(2)}</span>
+                  <span className="font-medium">{currencySymbol}{formData.budget.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Cost per Vote:</span>
-                  <span className="font-medium">${settings.default_cost_per_vote.toFixed(2)}</span>
+                  <span className="font-medium">{currencySymbol}{settings.default_cost_per_vote.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Target Votes:</span>
@@ -582,6 +687,10 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                       ? `${new Date(formData.startDate).toLocaleDateString()} - ${new Date(formData.endDate).toLocaleDateString()}`
                       : 'Until budget is spent'}
                   </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Currency:</span>
+                  <span className="font-medium">{formData.currency} ({currencySymbol})</span>
                 </div>
               </div>
             </div>
@@ -651,6 +760,21 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                           </span>
                         </div>
                       )}
+                      
+                      {/* Show currency support info */}
+                      {method.config?.supported_currencies && (
+                        <div className="mt-1 text-sm">
+                          {method.config.supported_currencies.includes(formData.currency) ? (
+                            <span className="text-success-600">
+                              Supports {formData.currency}
+                            </span>
+                          ) : (
+                            <span className="text-error-600">
+                              Does not support {formData.currency} - payment will be converted to {method.config.default_currency || 'USD'}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -666,6 +790,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                     transactionId={transactionId || ''}
                     onSuccess={handleStripePaymentSuccess}
                     onError={handleStripePaymentError}
+                    currency={formData.currency}
                   />
                 </Elements>
               </div>
@@ -678,7 +803,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Promotion Budget:</span>
-                    <span className="font-medium">${formData.budget.toFixed(2)}</span>
+                    <span className="font-medium">{currencySymbol}{formData.budget.toFixed(2)}</span>
                   </div>
                   
                   {/* If wallet payment, show points conversion */}
@@ -691,10 +816,20 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                     </div>
                   )}
                   
+                  {/* Show currency conversion if applicable */}
+                  {selectedPaymentMethod && formData.currency !== 'USD' && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Currency:</span>
+                      <span className="font-medium">
+                        {formData.currency} ({currencySymbol})
+                      </span>
+                    </div>
+                  )}
+                  
                   <div className="pt-2 border-t border-gray-200 mt-2">
                     <div className="flex justify-between">
                       <span className="text-gray-800 font-medium">Total:</span>
-                      <span className="font-bold text-gray-900">${formData.budget.toFixed(2)}</span>
+                      <span className="font-bold text-gray-900">{currencySymbol}{formData.budget.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
