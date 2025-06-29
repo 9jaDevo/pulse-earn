@@ -173,7 +173,7 @@ export class PromotedPollService {
       }
 
       // Create the promoted poll
-      const { data, error } = await supabase
+      const { data: promotedPoll, error: promotionError } = await supabase
         .from('promoted_polls')
         .insert({
           poll_id: promotedPollData.poll_id,
@@ -186,16 +186,17 @@ export class PromotedPollService {
           status: 'pending_approval',
           payment_status: 'pending',
           start_date: promotedPollData.start_date,
-          end_date: promotedPollData.end_date
+          end_date: promotedPollData.end_date,
+          currency: promotedPollData.currency
         })
         .select()
         .single();
 
-      if (error) {
-        return { data: null, error: error.message };
+      if (promotionError) {
+        return { data: null, error: promotionError.message };
       }
 
-      return { data, error: null };
+      return { data: promotedPoll, error: null };
     } catch (error) {
       return {
         data: null,
@@ -305,6 +306,36 @@ export class PromotedPollService {
       return {
         data: null,
         error: error instanceof Error ? error.message : 'Failed to update promoted poll'
+      };
+    }
+  }
+
+  /**
+   * Delete a promoted poll
+   */
+  static async deletePromotedPoll(
+    userId: string,
+    promotedPollId: string
+  ): Promise<ServiceResponse<boolean>> {
+    try {
+      // Use the database function to handle deletion with proper error handling
+      const { data, error } = await supabase
+        .rpc('delete_promoted_poll', {
+          p_promoted_poll_id: promotedPollId,
+          p_user_id: userId
+        });
+
+      if (error) {
+        console.error('Error deleting promoted poll:', error);
+        return { data: null, error: error.message };
+      }
+
+      return { data: true, error: null };
+    } catch (error) {
+      console.error('Exception in deletePromotedPoll:', error);
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to delete promoted poll'
       };
     }
   }
@@ -1388,6 +1419,7 @@ export const {
   getPromotedPollById,
   createPromotedPoll,
   updatePromotedPoll,
+  deletePromotedPoll,
   approvePromotedPoll,
   rejectPromotedPoll,
   pausePromotedPoll,

@@ -246,6 +246,37 @@ export const SponsorDashboard: React.FC = () => {
     setShowRetryPaymentModal(true);
   };
   
+  // Handler for deleting a promoted poll
+  const handleDeletePromotedPoll = async (poll: PromotedPoll) => {
+    if (!user) {
+      errorToast('You must be logged in to delete a promoted poll');
+      return;
+    }
+    
+    // Confirm with the user
+    if (!confirm('Are you sure you want to delete this promoted poll? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      const { data, error } = await PromotedPollService.deletePromotedPoll(user.id, poll.id);
+      
+      if (error) {
+        errorToast(error);
+        return;
+      }
+      
+      if (data) {
+        successToast('Promoted poll deleted successfully');
+        fetchPromotedPolls();
+      } else {
+        errorToast('Failed to delete promoted poll');
+      }
+    } catch (err) {
+      errorToast('Failed to delete promoted poll');
+    }
+  };
+  
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'pending_approval':
@@ -458,9 +489,9 @@ export const SponsorDashboard: React.FC = () => {
                           )}
                           {poll.status === 'pending_approval' && (
                             <button
-                              onClick={() => handleCancelPromotedPoll(poll)}
+                              onClick={() => handleDeletePromotedPoll(poll)}
                               className="p-2 text-error-600 hover:text-error-800 rounded-full hover:bg-error-50"
-                              title="Cancel"
+                              title="Delete"
                             >
                               <Trash2 className="h-5 w-5" />
                             </button>
