@@ -17,14 +17,20 @@ import {
   FileText,
   CreditCard,
   Send,
-  Plus
+  Plus,
+  Globe,
+  Trash2,
+  Save,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PayoutService } from '../../services/payoutService';
+import { SettingsService } from '../../services/settingsService';
 import { useToast } from '../../hooks/useToast';
 import { Pagination } from '../ui/Pagination';
 import { format } from 'date-fns';
 import { downloadCSV } from '../../utils/exportData';
+import getSymbolFromCurrency from 'currency-symbol-map';
 
 interface PayoutRequest {
   id: string;
@@ -46,6 +52,7 @@ interface PayoutRequest {
     name: string;
     email: string;
   };
+  currency?: string;
 }
 
 interface PayoutMethod {
@@ -71,6 +78,9 @@ const PayoutDetailModal: React.FC<PayoutDetailModalProps> = ({
   const [notes, setNotes] = useState(request.admin_notes || '');
   const [transactionId, setTransactionId] = useState(request.transaction_id || '');
   const [loading, setLoading] = useState(false);
+  
+  // Get currency symbol
+  const currencySymbol = getSymbolFromCurrency(request.currency || 'USD') || '$';
   
   const handleUpdateStatus = async (status: 'approved' | 'rejected' | 'processed') => {
     setLoading(true);
@@ -108,7 +118,9 @@ const PayoutDetailModal: React.FC<PayoutDetailModalProps> = ({
           </div>
           <div>
             <h3 className="text-sm font-medium text-gray-500 mb-1">Amount</h3>
-            <p className="text-xl font-bold text-gray-900">${request.amount.toFixed(2)}</p>
+            <p className="text-xl font-bold text-gray-900">
+              {currencySymbol}{request.amount.toFixed(2)} {request.currency || 'USD'}
+            </p>
           </div>
           <div>
             <h3 className="text-sm font-medium text-gray-500 mb-1">Payout Method</h3>
@@ -173,6 +185,12 @@ const PayoutDetailModal: React.FC<PayoutDetailModalProps> = ({
             {request.payout_details.user_country && (
               <div className="mt-2">
                 <span className="font-medium">Country:</span> {request.payout_details.user_country}
+              </div>
+            )}
+            
+            {request.currency && (
+              <div className="mt-2">
+                <span className="font-medium">Currency:</span> {request.currency} ({currencySymbol})
               </div>
             )}
           </div>
@@ -262,6 +280,9 @@ const PayoutMethodModal: React.FC<PayoutMethodModalProps> = ({
   const { user } = useAuth();
   const { successToast, errorToast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>(['USD']);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(true);
+  
   const [formData, setFormData] = useState<{
     name: string;
     description: string;
@@ -274,6 +295,8 @@ const PayoutMethodModal: React.FC<PayoutMethodModalProps> = ({
     requires_email: boolean;
     requires_bank_details: boolean;
     requires_admin_approval: boolean;
+    supported_currencies: string[];
+    default_currency: string;
   }>({
     name: '',
     description: '',
@@ -285,7 +308,9 @@ const PayoutMethodModal: React.FC<PayoutMethodModalProps> = ({
     processing_days: 1,
     requires_email: false,
     requires_bank_details: false,
-    requires_admin_approval: false
+    requires_admin_approval: false,
+    supported_currencies: ['USD'],
+    default_currency: 'USD'
   });
   
   // Initialize form data from method
@@ -302,9 +327,40 @@ const PayoutMethodModal: React.FC<PayoutMethodModalProps> = ({
         processing_days: method.config?.processing_days || 1,
         requires_email: method.config?.requires_email || false,
         requires_bank_details: method.config?.requires_bank_details || false,
-        requires_admin_approval: method.config?.requires_admin_approval || false
+        requires_admin_approval: method.config?.requires_admin_approval || false,
+        supported_currencies: method.config?.supported_currencies || ['USD'],
+        default_currency: method.config?.default_currency || 'USD'
       });
     }
+  }, [method]);
+  
+  // Fetch supported currencies
+  useEffect(() => {
+    const fetchCurrencies = async () => {
+      setLoadingCurrencies(true);
+      try {
+        const { data, error } = await SettingsService.getSupportedCurrencies();
+        if (error) {
+          console.error('Error fetching currencies:', error);
+        } else {
+          setSupportedCurrencies(data || ['USD']);
+          
+          // If method doesn't have supported currencies yet, set all as supported
+          if (method && (!method.config?.supported_currencies || method.config.supported_currencies.length === 0)) {
+            setFormData(prev => ({
+              ...prev,
+              supported_currencies: data || ['USD']
+            }));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch currencies:', err);
+      } finally {
+        setLoadingCurrencies(false);
+      }
+    };
+    
+    fetchCurrencies();
   }, [method]);
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -320,6 +376,12 @@ const PayoutMethodModal: React.FC<PayoutMethodModalProps> = ({
       return;
     }
     
+    // Ensure default currency is in supported currencies
+    if (!formData.supported_currencies.includes(formData.default_currency)) {
+      errorToast('Default currency must be one of the supported currencies');
+      return;
+    }
+    
     setLoading(true);
     
     try {
@@ -331,7 +393,9 @@ const PayoutMethodModal: React.FC<PayoutMethodModalProps> = ({
         processing_days: formData.processing_days,
         requires_email: formData.requires_email,
         requires_bank_details: formData.requires_bank_details,
-        requires_admin_approval: formData.requires_admin_approval
+        requires_admin_approval: formData.requires_admin_approval,
+        supported_currencies: formData.supported_currencies,
+        default_currency: formData.default_currency
       };
       
       if (method) {
@@ -464,6 +528,7 @@ const PayoutMethodModal: React.FC<PayoutMethodModalProps> = ({
                 className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="Fee percentage"
                 min="0"
+                max="100"
                 step="0.01"
               />
             </div>
@@ -482,6 +547,94 @@ const PayoutMethodModal: React.FC<PayoutMethodModalProps> = ({
                 step="0.01"
               />
             </div>
+          </div>
+          
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Default Currency
+            </label>
+            <div className="relative">
+              <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <select
+                value={formData.default_currency}
+                onChange={(e) => setFormData(prev => ({ ...prev, default_currency: e.target.value }))}
+                className="w-full pl-10 p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none"
+              >
+                {loadingCurrencies ? (
+                  <option value="USD">Loading currencies...</option>
+                ) : (
+                  supportedCurrencies.map(currency => (
+                    <option 
+                      key={currency} 
+                      value={currency}
+                      disabled={!formData.supported_currencies.includes(currency)}
+                    >
+                      {currency} {getSymbolFromCurrency(currency) || ''}
+                      {!formData.supported_currencies.includes(currency) ? ' (not supported)' : ''}
+                    </option>
+                  ))
+                )}
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Default currency for this payout method
+            </p>
+          </div>
+          
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Supported Currencies
+            </label>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {loadingCurrencies ? (
+                  <div className="col-span-full text-center py-4">
+                    <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">Loading currencies...</p>
+                  </div>
+                ) : (
+                  supportedCurrencies.map(currency => (
+                    <label key={currency} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.supported_currencies.includes(currency)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData(prev => ({
+                              ...prev,
+                              supported_currencies: [...prev.supported_currencies, currency]
+                            }));
+                          } else {
+                            // Don't allow removing the default currency
+                            if (currency === formData.default_currency) {
+                              errorToast('Cannot remove the default currency');
+                              return;
+                            }
+                            
+                            setFormData(prev => ({
+                              ...prev,
+                              supported_currencies: prev.supported_currencies.filter(c => c !== currency)
+                            }));
+                          }
+                        }}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      />
+                      <span className="text-sm text-gray-700">
+                        {currency} {getSymbolFromCurrency(currency) || ''}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Select which currencies this payout method supports
+            </p>
           </div>
           
           <div className="space-y-4">
@@ -592,9 +745,12 @@ export const PayoutManagement: React.FC = () => {
   const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<PayoutRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('pending');
+  const [currencyFilter, setcurrencyFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalRequests, setTotalRequests] = useState(0);
   const [requestsPerPage] = useState(10);
+  const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>(['USD']);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(true);
   
   // Payout methods state
   const [payoutMethods, setPayoutMethods] = useState<PayoutMethod[]>([]);
@@ -620,7 +776,26 @@ export const PayoutManagement: React.FC = () => {
     } else if (activeTab === 'stats') {
       fetchPayoutStats();
     }
-  }, [activeTab, statusFilter, currentPage]);
+    
+    // Fetch supported currencies
+    fetchSupportedCurrencies();
+  }, [activeTab, statusFilter, currencyFilter, currentPage]);
+  
+  const fetchSupportedCurrencies = async () => {
+    setLoadingCurrencies(true);
+    try {
+      const { data, error } = await SettingsService.getSupportedCurrencies();
+      if (error) {
+        console.error('Error fetching currencies:', error);
+      } else {
+        setSupportedCurrencies(data || ['USD']);
+      }
+    } catch (err) {
+      console.error('Failed to fetch currencies:', err);
+    } finally {
+      setLoadingCurrencies(false);
+    }
+  };
   
   const fetchPayoutRequests = async () => {
     if (!user) return;
@@ -643,7 +818,15 @@ export const PayoutManagement: React.FC = () => {
         return;
       }
       
-      setPayoutRequests(data?.requests || []);
+      // Filter by currency if needed
+      let filteredRequests = data?.requests || [];
+      if (currencyFilter !== 'all') {
+        filteredRequests = filteredRequests.filter(request => 
+          request.currency === currencyFilter
+        );
+      }
+      
+      setPayoutRequests(filteredRequests);
       setTotalRequests(data?.totalCount || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load payout requests');
@@ -741,7 +924,8 @@ export const PayoutManagement: React.FC = () => {
       ID: request.id,
       User: request.user?.name || 'Unknown',
       Email: request.user?.email || 'Unknown',
-      Amount: `$${request.amount.toFixed(2)}`,
+      Amount: `${getSymbolFromCurrency(request.currency || 'USD') || '$'}${request.amount.toFixed(2)}`,
+      Currency: request.currency || 'USD',
       Method: request.payout_method,
       Status: request.status,
       RequestedAt: new Date(request.requested_at).toLocaleString(),
@@ -788,6 +972,26 @@ export const PayoutManagement: React.FC = () => {
             <option value="approved">Approved</option>
             <option value="processed">Processed</option>
             <option value="rejected">Rejected</option>
+          </select>
+          
+          <select
+            value={currencyFilter}
+            onChange={(e) => {
+              setcurrencyFilter(e.target.value);
+              setCurrentPage(1); // Reset to first page when filter changes
+            }}
+            className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="all">All Currencies</option>
+            {loadingCurrencies ? (
+              <option value="" disabled>Loading currencies...</option>
+            ) : (
+              supportedCurrencies.map(currency => (
+                <option key={currency} value={currency}>
+                  {currency} {getSymbolFromCurrency(currency) || ''}
+                </option>
+              ))
+            )}
           </select>
           
           <select
@@ -881,7 +1085,15 @@ export const PayoutManagement: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-gray-900">${request.amount.toFixed(2)}</div>
+                      <div className="text-sm font-bold text-gray-900">
+                        {getSymbolFromCurrency(request.currency || 'USD') || '$'}
+                        {request.amount.toFixed(2)}
+                      </div>
+                      {request.currency && request.currency !== 'USD' && (
+                        <div className="text-xs text-gray-500">
+                          {request.currency}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{request.payout_method}</div>
@@ -919,7 +1131,7 @@ export const PayoutManagement: React.FC = () => {
       )}
     </div>
   );
-  
+
   const renderMethods = () => (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -1026,6 +1238,33 @@ export const PayoutManagement: React.FC = () => {
                     {method.is_automatic ? 'Yes' : 'No'}
                   </span>
                 </div>
+                
+                {/* Default Currency */}
+                {method.config?.default_currency && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Default Currency:</span>
+                    <span className="font-medium">
+                      {method.config.default_currency} {getSymbolFromCurrency(method.config.default_currency) || ''}
+                    </span>
+                  </div>
+                )}
+                
+                {/* Supported Currencies */}
+                {method.config?.supported_currencies && method.config.supported_currencies.length > 0 && (
+                  <div>
+                    <span className="text-gray-500 block mb-1">Supported Currencies:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {method.config.supported_currencies.map(currency => (
+                        <span 
+                          key={currency}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-800"
+                        >
+                          {currency} {getSymbolFromCurrency(currency) || ''}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -1162,6 +1401,12 @@ export const PayoutManagement: React.FC = () => {
                   <Info className="h-5 w-5 text-primary-600 flex-shrink-0 mt-0.5" />
                   <p className="text-gray-600 text-sm">
                     For bank transfers, verify account details carefully before processing.
+                  </p>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <Info className="h-5 w-5 text-primary-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-gray-600 text-sm">
+                    Check the currency of each payout request and ensure you're processing it correctly.
                   </p>
                 </div>
               </div>
