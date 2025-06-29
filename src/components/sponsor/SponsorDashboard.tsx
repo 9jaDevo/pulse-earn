@@ -21,6 +21,7 @@ import { useToast } from '../../hooks/useToast';
 import { ManageSponsorProfile } from './ManageSponsorProfile';
 import { CreatePromotedPollModal } from './CreatePromotedPollModal';
 import { PromotedPollDetailModal } from '../common/PromotedPollDetailModal';
+import { EditPromotedPollModal } from './EditPromotedPollModal';
 import type { Sponsor, PromotedPoll } from '../../types/api';
 
 export const SponsorDashboard: React.FC = () => {
@@ -39,6 +40,10 @@ export const SponsorDashboard: React.FC = () => {
   // State for promoted poll detail modal
   const [selectedPromotedPoll, setSelectedPromotedPoll] = useState<PromotedPoll | null>(null);
   const [showPromotedPollDetailModal, setShowPromotedPollDetailModal] = useState(false);
+  
+  // State for edit promoted poll modal
+  const [showEditPollModal, setShowEditPollModal] = useState(false);
+  const [editingPromotedPoll, setEditingPromotedPoll] = useState<PromotedPoll | null>(null);
   
   useEffect(() => {
     if (user) {
@@ -143,8 +148,18 @@ export const SponsorDashboard: React.FC = () => {
   // Handler for editing a promoted poll
   const handleEditPromotedPoll = (poll: PromotedPoll) => {
     console.log('Edit promoted poll:', poll.id);
-    // For now, just show a toast message
-    errorToast('Editing promoted polls will be available in a future update');
+    setEditingPromotedPoll(poll);
+    setShowEditPollModal(true);
+  };
+  
+  // Handler for updating a promoted poll
+  const handlePromotedPollUpdated = (updatedPoll: PromotedPoll) => {
+    setPromotedPolls(prev => 
+      prev.map(p => p.id === updatedPoll.id ? updatedPoll : p)
+    );
+    setEditingPromotedPoll(null);
+    setShowEditPollModal(false);
+    successToast('Promoted poll updated successfully!');
   };
   
   // Handler for canceling a promoted poll
@@ -516,6 +531,19 @@ export const SponsorDashboard: React.FC = () => {
           poll={selectedPromotedPoll}
           userRole={user?.role || 'user'}
           onClose={() => setShowPromotedPollDetailModal(false)}
+        />
+      )}
+      
+      {/* Edit Promoted Poll Modal */}
+      {showEditPollModal && editingPromotedPoll && (
+        <EditPromotedPollModal
+          isOpen={showEditPollModal}
+          onClose={() => {
+            setShowEditPollModal(false);
+            setEditingPromotedPoll(null);
+          }}
+          onSuccess={handlePromotedPollUpdated}
+          promotedPoll={editingPromotedPoll}
         />
       )}
     </div>
