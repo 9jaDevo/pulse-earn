@@ -214,12 +214,29 @@ src/
    VITE_STRIPE_PUBLIC_KEY=your_stripe_publishable_key
    ```
 
-3. **Set up Supabase database**:
+3. **Stripe API Key Configuration**:
+   
+   PulseEarn uses Stripe for payment processing. There are two important keys to configure:
+   
+   - **Publishable Key**: Used for frontend integration with Stripe.js.
+     - Can be set in `.env` file as `VITE_STRIPE_PUBLIC_KEY`
+     - Can also be managed through the admin panel (Settings > Integrations)
+     - The system will first check the database settings, then fall back to the environment variable
+   
+   - **Secret Key**: Used for server-side operations (creating Payment Intents, etc.).
+     - **IMPORTANT**: This key must be kept secure and never exposed in the frontend
+     - Must be configured in your Supabase project's Edge Functions settings
+     - Log into your Supabase dashboard, go to Edge Functions, and add `STRIPE_SECRET_KEY` as an environment variable
+     - This key is used by the `create-payment-intent` and `stripe-webhook` functions
+
+   If you're experiencing issues with Stripe payments, ensure both keys are properly configured in their respective locations.
+
+4. **Set up Supabase database**:
    - Run the migration files in `/supabase/migrations/` in order
    - Enable Row Level Security on all tables
    - Set up authentication policies
 
-4. **Run the development server**:
+5. **Run the development server**:
    ```bash
    npm run dev
    ```
