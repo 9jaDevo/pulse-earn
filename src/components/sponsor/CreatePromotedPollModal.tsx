@@ -78,6 +78,13 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
     currency: 'USD'
   });
   
+  // Exchange rates for currency conversion
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
+    USD: 1,
+    GBP: 0.78,
+    NGN: 1500
+  });
+  
   // Helper function to validate Stripe key
   const isValidStripeKey = (key: string): boolean => {
     return key && 
@@ -139,16 +146,19 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
       fetchPaymentMethods();
       fetchSettings();
       fetchSupportedCurrencies();
+      fetchExchangeRates();
     }
   }, [user]);
   
   // Update target votes when budget changes
   useEffect(() => {
     if (settings.default_cost_per_vote > 0) {
-      const targetVotes = Math.floor(formData.budget / settings.default_cost_per_vote);
+      // Convert cost per vote to the selected currency
+      const costPerVoteInSelectedCurrency = convertAmount(settings.default_cost_per_vote, 'USD', formData.currency);
+      const targetVotes = Math.floor(formData.budget / costPerVoteInSelectedCurrency);
       setFormData(prev => ({ ...prev, targetVotes }));
     }
-  }, [formData.budget, settings.default_cost_per_vote]);
+  }, [formData.budget, formData.currency, settings.default_cost_per_vote, exchangeRates]);
   
   // Set default currency from user profile
   useEffect(() => {
@@ -198,6 +208,29 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
       console.error('Failed to fetch currencies:', err);
     } finally {
       setLoadingCurrencies(false);
+    }
+  };
+  
+  const fetchExchangeRates = async () => {
+    try {
+      // Fetch exchange rates for all supported currencies
+      const { data: rates } = await SettingsService.getAllExchangeRates();
+      
+      if (rates) {
+        const ratesMap: Record<string, number> = {};
+        
+        // Process the rates into a more usable format
+        rates.forEach(rate => {
+          if (!ratesMap[rate.from_currency]) {
+            ratesMap[rate.from_currency] = {};
+          }
+          ratesMap[rate.from_currency][rate.to_currency] = rate.rate;
+        });
+        
+        setExchangeRates(ratesMap);
+      }
+    } catch (err) {
+      console.error('Failed to fetch exchange rates:', err);
     }
   };
   
@@ -286,11 +319,16 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         });
         
         // Update initial budget and target votes
-        setFormData(prev => ({
-          ...prev,
-          budget: data.minimum_budget,
-          targetVotes: Math.floor(data.minimum_budget / data.default_cost_per_vote)
-        }));
+        setFormData(prev => {
+          const budget = convertAmount(data.minimum_budget, 'USD', prev.currency);
+          const targetVotes = Math.floor(budget / convertAmount(data.default_cost_per_vote, 'USD', prev.currency));
+          
+          return {
+            ...prev,
+            budget,
+            targetVotes
+          };
+        });
       }
     } catch (err) {
       errorToast('Failed to load promotion settings');
@@ -302,14 +340,62 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
     setStep('configure');
   };
   
+  // Convert amount between currencies
+  const convertAmount = (amount: number, fromCurrency: string, toCurrency: string): number => {
+    if (fromCurrency === toCurrency) return amount;
+    
+    // Get exchange rate
+    const rate = getExchangeRate(fromCurrency, toCurrency);
+    return amount * rate;
+  };
+  
+  // Get exchange rate between two currencies
+  const getExchangeRate = (fromCurrency: string, toCurrency: string): number => {
+    if (fromCurrency === toCurrency) return 1;
+    
+    // Check if we have a direct rate
+    if (exchangeRates[fromCurrency] && exchangeRates[fromCurrency][toCurrency]) {
+      return exchangeRates[fromCurrency][toCurrency];
+    }
+    
+    // Try to calculate via USD
+    if (exchangeRates[fromCurrency] && exchangeRates[fromCurrency]['USD'] &&
+        exchangeRates['USD'] && exchangeRates['USD'][toCurrency]) {
+      return exchangeRates[fromCurrency]['USD'] * exchangeRates['USD'][toCurrency];
+    }
+    
+    // Fallback to 1:1 if no conversion path found
+    console.warn(`No exchange rate found for ${fromCurrency} to ${toCurrency}`);
+    return 1;
+  };
+  
   const handleBudgetChange = (value: number) => {
-    // Ensure budget is within limits
+    // Convert min and max budget to the selected currency
+    const minBudgetInSelectedCurrency = convertAmount(settings.minimum_budget, 'USD', formData.currency);
+    const maxBudgetInSelectedCurrency = convertAmount(settings.maximum_budget, 'USD', formData.currency);
+    
+    // Ensure budget is within limits in the selected currency
     const budget = Math.max(
-      settings.minimum_budget,
-      Math.min(settings.maximum_budget, value)
+      minBudgetInSelectedCurrency,
+      Math.min(maxBudgetInSelectedCurrency, value)
     );
     
     setFormData(prev => ({ ...prev, budget }));
+  };
+  
+  const handleCurrencyChange = (currency: string) => {
+    // Get current budget in USD
+    const currentBudgetInUSD = convertAmount(formData.budget, formData.currency, 'USD');
+    
+    // Convert budget to new currency
+    const budgetInNewCurrency = convertAmount(currentBudgetInUSD, 'USD', currency);
+    
+    // Update form data with new currency and converted budget
+    setFormData(prev => ({
+      ...prev,
+      currency,
+      budget: budgetInNewCurrency
+    }));
   };
   
   const handleSubmitConfiguration = () => {
@@ -326,20 +412,59 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
     
     setStep('payment');
   };
-
-  // New helper function to initiate payment flow
-  const initiatePaymentFlow = async (
-    promotedPollId: string,
-    paymentMethodType: string
-  ): Promise<boolean> => {
+  
+  const handlePayment = async () => {
+    if (!user || !selectedPollId || !sponsorId) {
+      errorToast('Missing required information');
+      return;
+    }
+    
+    setLoading(true);
+    
     try {
+      // Convert budget to USD for storage
+      const budgetInUSD = convertAmount(formData.budget, formData.currency, 'USD');
+      const costPerVoteInUSD = settings.default_cost_per_vote;
+      
+      // Create the promoted poll
+      const { data: promotedPoll, error: promotionError } = await PromotedPollService.createPromotedPoll(
+        user.id,
+        {
+          poll_id: selectedPollId,
+          sponsor_id: sponsorId,
+          budget_amount: budgetInUSD,
+          target_votes: formData.targetVotes,
+          start_date: formData.startDate || undefined,
+          end_date: formData.endDate || undefined,
+          currency: formData.currency
+        }
+      );
+      
+      if (promotionError) {
+        throw new Error(promotionError);
+      }
+      
+      if (!promotedPoll) {
+        throw new Error('Failed to create promoted poll');
+      }
+      
       // Process payment based on selected method
-      if (paymentMethodType === 'wallet') {
+      const selectedMethod = paymentMethods.find(m => m.id === selectedPaymentMethod);
+      
+      if (!selectedMethod) {
+        throw new Error('Invalid payment method');
+      }
+      
+      if (selectedMethod.type === 'stripe' && (!stripeInstance || stripeLoadError)) {
+        throw new Error('Stripe payment system is not available. Please contact support or use an alternative payment method.');
+      }
+      
+      if (selectedMethod.type === 'wallet') {
         // Process wallet payment
         const { error: paymentError } = await PaymentService.processWalletPayment(
-          user!.id,
-          formData.budget,
-          promotedPollId,
+          user.id,
+          budgetInUSD,
+          promotedPoll.id,
           formData.currency
         );
         
@@ -350,17 +475,16 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         successToast('Payment successful! Your poll promotion is pending approval.');
         onSuccess();
         onClose();
-        return true;
-      } else if (paymentMethodType === 'stripe') {
+      } else if (selectedMethod.type === 'stripe') {
         if (!stripeInstance || stripeLoadError) {
           throw new Error('Stripe payment system is not available. Please contact support or use an alternative payment method.');
         }
         
         // Initialize Stripe payment
         const { data: stripeData, error: stripeError } = await PaymentService.initializeStripePayment(
-          user!.id,
-          formData.budget,
-          promotedPollId,
+          user.id,
+          budgetInUSD,
+          promotedPoll.id,
           formData.currency
         );
         
@@ -377,13 +501,13 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         setTransactionId(stripeData.transactionId);
         
         // Don't close modal yet - user needs to complete Stripe payment
-        return true;
-      } else if (paymentMethodType === 'paystack') {
+        setLoading(false);
+      } else if (selectedMethod.type === 'paystack') {
         // Initialize Paystack payment
         const { data: paystackData, error: paystackError } = await PaymentService.initializePaystackPayment(
-          user!.id,
-          formData.budget,
-          promotedPollId,
+          user.id,
+          budgetInUSD,
+          promotedPoll.id,
           formData.currency
         );
         
@@ -399,69 +523,16 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
         window.location.href = paystackData.authorizationUrl;
         
         // Don't close modal or show success message yet - user needs to complete Paystack payment
-        return true;
+        setLoading(false);
       } else {
         // For other payment methods (PayPal)
         // This would be implemented similarly to Stripe
         successToast('Your poll promotion has been created and is pending payment and approval.');
         onSuccess();
         onClose();
-        return true;
       }
-    } catch (error) {
-      errorToast(error instanceof Error ? error.message : 'Failed to process payment');
-      return false;
-    }
-  };
-  
-  const handlePayment = async () => {
-    if (!user || !selectedPollId || !sponsorId) {
-      errorToast('Missing required information');
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
-      // Create the promoted poll
-      const { data: promotedPoll, error: promotionError } = await PromotedPollService.createPromotedPoll(
-        user.id,
-        {
-          poll_id: selectedPollId,
-          sponsor_id: sponsorId,
-          budget_amount: formData.budget,
-          target_votes: formData.targetVotes,
-          start_date: formData.startDate || undefined,
-          end_date: formData.endDate || undefined,
-          currency: formData.currency
-        }
-      );
-      
-      if (promotionError) {
-        throw new Error(promotionError);
-      }
-      
-      if (!promotedPoll) {
-        throw new Error('Failed to create promoted poll');
-      }
-      
-      // Get the selected payment method
-      const selectedMethod = paymentMethods.find(m => m.id === selectedPaymentMethod);
-      
-      if (!selectedMethod) {
-        throw new Error('Invalid payment method');
-      }
-      
-      // Initiate payment flow
-      const paymentSuccess = await initiatePaymentFlow(promotedPoll.id, selectedMethod.type);
-      
-      if (!paymentSuccess) {
-        // If payment failed, we'll keep the modal open for the user to try again
-        setLoading(false);
-      }
-      
-    } catch (error) {
-      errorToast(error instanceof Error ? error.message : 'Failed to create promoted poll');
+    } catch (err) {
+      errorToast(err instanceof Error ? err.message : 'Failed to create promoted poll');
       setLoading(false);
     }
   };
@@ -505,6 +576,9 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
   
   // Get currency symbol
   const currencySymbol = getSymbolFromCurrency(formData.currency) || '$';
+  
+  // Get cost per vote in selected currency
+  const costPerVoteInSelectedCurrency = convertAmount(settings.default_cost_per_vote, 'USD', formData.currency);
   
   if (!isOpen) return null;
   
@@ -647,7 +721,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
               <div>
                 <h3 className="font-medium text-blue-800 mb-1">How Promotion Works</h3>
                 <p className="text-blue-700 text-sm">
-                  You'll be charged {currencySymbol}{settings.default_cost_per_vote.toFixed(2)} per vote your poll receives. 
+                  You'll be charged {currencySymbol}{costPerVoteInSelectedCurrency.toFixed(2)} per vote your poll receives. 
                   Set your budget and we'll promote your poll until you reach your target votes or your budget is spent.
                 </p>
               </div>
@@ -662,7 +736,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                 <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <select
                   value={formData.currency}
-                  onChange={(e) => setFormData(prev => ({ ...prev, currency: e.target.value }))}
+                  onChange={(e) => handleCurrencyChange(e.target.value)}
                   className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none"
                 >
                   {loadingCurrencies ? (
@@ -695,8 +769,8 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                 <DollarSign className="h-5 w-5 text-gray-400" />
                 <input
                   type="range"
-                  min={settings.minimum_budget}
-                  max={settings.maximum_budget}
+                  min={convertAmount(settings.minimum_budget, 'USD', formData.currency)}
+                  max={convertAmount(settings.maximum_budget, 'USD', formData.currency)}
                   step={5}
                   value={formData.budget}
                   onChange={(e) => handleBudgetChange(Number(e.target.value))}
@@ -708,14 +782,14 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                     value={formData.budget}
                     onChange={(e) => handleBudgetChange(Number(e.target.value))}
                     className="w-full p-2 border border-gray-200 rounded-lg text-center"
-                    min={settings.minimum_budget}
-                    max={settings.maximum_budget}
+                    min={convertAmount(settings.minimum_budget, 'USD', formData.currency)}
+                    max={convertAmount(settings.maximum_budget, 'USD', formData.currency)}
                   />
                 </div>
               </div>
               <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>{currencySymbol}{settings.minimum_budget}</span>
-                <span>{currencySymbol}{settings.maximum_budget}</span>
+                <span>{currencySymbol}{convertAmount(settings.minimum_budget, 'USD', formData.currency).toFixed(2)}</span>
+                <span>{currencySymbol}{convertAmount(settings.maximum_budget, 'USD', formData.currency).toFixed(2)}</span>
               </div>
             </div>
             
@@ -734,7 +808,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Based on {currencySymbol}{settings.default_cost_per_vote.toFixed(2)} per vote
+                Based on {currencySymbol}{costPerVoteInSelectedCurrency.toFixed(2)} per vote
               </p>
             </div>
             
@@ -783,7 +857,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Cost per Vote:</span>
-                  <span className="font-medium">{currencySymbol}{settings.default_cost_per_vote.toFixed(2)}</span>
+                  <span className="font-medium">{currencySymbol}{costPerVoteInSelectedCurrency.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Target Votes:</span>
