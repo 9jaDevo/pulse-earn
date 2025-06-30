@@ -89,14 +89,29 @@ export class PaymentService {
       }
       
       // Filter methods by enabled methods
-      const availableMethods = allMethods?.filter(method => 
+      let availableMethods = allMethods?.filter(method => 
         enabledMethods?.includes(method.type)
       ) || [];
       
       // If currency is provided, filter methods that support the currency
       if (currency) {
-        // In a real implementation, you would check if each payment method supports the currency
-        // For now, we'll assume all methods support all currencies
+        availableMethods = availableMethods.filter(method => {
+          // If the method has supported_currencies config
+          if (method.config?.supported_currencies) {
+            // Check if the currency is in the supported list
+            return method.config.supported_currencies.includes(currency);
+          }
+          
+          // If the method has a default_currency config
+          if (method.config?.default_currency) {
+            // Only include if the default currency matches the selected currency
+            return method.config.default_currency === currency;
+          }
+          
+          // If no currency config is specified, assume it supports all currencies
+          // This is a fallback and should be addressed by proper configuration
+          return true;
+        });
       }
       
       return { data: availableMethods, error: null };
@@ -276,7 +291,6 @@ export class PaymentService {
         updateData.gateway_transaction_id = gatewayTransactionId;
       }
       
-      // Attempt to update the transaction
       const { data, error } = await supabase
         .from('transactions')
         .update(updateData)
