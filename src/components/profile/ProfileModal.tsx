@@ -41,12 +41,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       try {
         const { data, error } = await SettingsService.getSupportedCurrencies();
         if (error) {
-          console.error('Error fetching currencies:', error);
+          console.warn('Could not fetch currencies from database, using default:', error);
+          setSupportedCurrencies(['USD', 'EUR', 'GBP', 'CAD', 'AUD']);
         } else {
           setSupportedCurrencies(data || ['USD']);
         }
       } catch (err) {
-        console.error('Failed to fetch currencies:', err);
+        console.warn('Failed to fetch currencies, using defaults:', err);
+        setSupportedCurrencies(['USD', 'EUR', 'GBP', 'CAD', 'AUD']);
       } finally {
         setLoadingCurrencies(false);
       }

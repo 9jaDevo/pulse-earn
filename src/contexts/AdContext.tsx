@@ -46,7 +46,14 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const loadAdSettings = async () => {
     setLoading(true);
     try {
-      const { data } = await SettingsService.getSettings('integrations');
+      // Only try to load settings if Supabase is properly configured
+      let data = null;
+      try {
+        const result = await SettingsService.getSettings('integrations');
+        data = result.data;
+      } catch (error) {
+        console.warn('Could not load ad settings from database, using environment variables:', error);
+      }
       
       if (data) {
         setAdsEnabled(data.adsenseEnabled !== false);
@@ -60,7 +67,20 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         });
       } else {
         // Fallback to environment variables
-        setAdsenseClientId(import.meta.env.VITE_ADSENSE_CLIENT_ID || null);
+        const clientId = import.meta.env.VITE_ADSENSE_CLIENT_ID;
+        
+        // Check if client ID is a placeholder or empty
+        const isValidClientId = clientId && 
+          clientId !== 'ca-pub-xxxxxxxxxxxxxxxxxx' && 
+          clientId.startsWith('ca-pub-') &&
+          !clientId.includes('placeholder');
+        
+        setAdsenseClientId(isValidClientId ? clientId : null);
+        
+        if (!isValidClientId && clientId) {
+          console.warn('[AdSense] Invalid or placeholder client ID detected. Please update VITE_ADSENSE_CLIENT_ID in .env with your actual AdSense publisher ID.');
+        }
+        
         setAdSlots({
           header: import.meta.env.VITE_ADSENSE_HEADER_SLOT || null,
           footer: import.meta.env.VITE_ADSENSE_FOOTER_SLOT || null,
@@ -72,7 +92,16 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     } catch (err) {
       console.error('Error loading ad settings:', err);
       // Fallback to environment variables
-      setAdsenseClientId(import.meta.env.VITE_ADSENSE_CLIENT_ID || null);
+      const clientId = import.meta.env.VITE_ADSENSE_CLIENT_ID;
+      
+      // Check if client ID is a placeholder or empty
+      const isValidClientId = clientId && 
+        clientId !== 'ca-pub-xxxxxxxxxxxxxxxxxx' && 
+        clientId.startsWith('ca-pub-') &&
+        !clientId.includes('placeholder');
+      
+      setAdsenseClientId(isValidClientId ? clientId : null);
+      
       setAdSlots({
         header: import.meta.env.VITE_ADSENSE_HEADER_SLOT || null,
         footer: import.meta.env.VITE_ADSENSE_FOOTER_SLOT || null,

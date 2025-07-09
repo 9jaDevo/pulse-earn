@@ -57,15 +57,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     const loadSettingsAsync = async () => {
       try {
-        // Dynamically import the settings context to avoid circular dependency
-        const { useSettings } = await import('./SettingsContext');
-        
-        // We can't use the hook here, so we'll access settings directly
-        // This is a workaround to avoid the context dependency issue
         const settingsModule = await import('../services/settingsService');
-        const { data } = await settingsModule.SettingsService.getSettings('general');
+        const result = await settingsModule.SettingsService.getSettings('general');
+        const data = result.data;
         
-        if (data) {
+        if (data && !result.error) {
           // Update theme selection permission
           if (data.allowThemeSelection !== undefined) {
             setAllowThemeSelection(data.allowThemeSelection);
@@ -83,7 +79,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
         }
       } catch (error) {
-        console.warn('Failed to load theme settings:', error);
+        console.warn('Could not load theme settings from database, using defaults:', error);
         // Continue with default behavior
       }
     };

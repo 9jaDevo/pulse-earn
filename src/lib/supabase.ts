@@ -3,15 +3,36 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-console.log('[Supabase] Initializing Supabase client with:', {
-  hasUrl: !!supabaseUrl,
-  hasAnonKey: !!supabaseAnonKey,
-  url: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'undefined',
-  keyLength: supabaseAnonKey ? supabaseAnonKey.length : 0
-});
+// Check for placeholder or missing values
+const isPlaceholderUrl = !supabaseUrl || 
+  supabaseUrl === 'your_supabase_project_url_here' || 
+  supabaseUrl.includes('placeholder');
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+const isPlaceholderKey = !supabaseAnonKey || 
+  supabaseAnonKey === 'your_supabase_anon_key_here' || 
+  supabaseAnonKey.includes('placeholder');
+
+if (isPlaceholderUrl || isPlaceholderKey) {
+  console.error('[Supabase] Configuration Error:', {
+    hasUrl: !!supabaseUrl,
+    hasAnonKey: !!supabaseAnonKey,
+    isPlaceholderUrl,
+    isPlaceholderKey
+  });
+  
+  throw new Error(`
+    Supabase configuration incomplete. Please update your .env file with actual values:
+    
+    1. Go to https://supabase.com/dashboard
+    2. Select your project
+    3. Go to Settings > API
+    4. Copy your Project URL and anon/public key
+    5. Update VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env
+    
+    Current status:
+    - URL configured: ${!isPlaceholderUrl}
+    - Key configured: ${!isPlaceholderKey}
+  `);
 }
 
 // Validate URL format
