@@ -1,9 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { X, User, Mail, Globe, Camera, Save, Gift, Copy, Loader } from 'lucide-react';
+import { X, User, Mail, Globe, Camera, Save, Gift, Copy, Loader, DollarSign } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { CountrySelect } from '../ui/CountrySelect';
 import { useToast } from '../../hooks/useToast';
 import { supabase } from '../../lib/supabase';
+import { SettingsService } from '../../services/settingsService';
+import getSymbolFromCurrency from 'currency-symbol-map';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -14,9 +16,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const { profile, updateProfile } = useAuth();
   const [name, setName] = useState(profile?.name || '');
   const [country, setCountry] = useState(profile?.country || '');
+  const [currency, setCurrency] = useState(profile?.currency || 'USD');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [copiedReferral, setCopiedReferral] = useState(false);
+  const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>(['USD']);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(true);
   const { successToast, errorToast } = useToast();
   
   // Avatar upload states
@@ -27,7 +32,29 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     if (profile) {
       setName(profile.name || '');
       setCountry(profile.country || '');
+      setCurrency(profile.currency || 'USD');
     }
+    
+    // Fetch supported currencies
+    const fetchCurrencies = async () => {
+      setLoadingCurrencies(true);
+      try {
+        const { data, error } = await SettingsService.getSupportedCurrencies();
+        if (error) {
+          console.warn('Could not fetch currencies from database, using default:', error);
+          setSupportedCurrencies(['USD', 'EUR', 'GBP', 'CAD', 'AUD']);
+        } else {
+          setSupportedCurrencies(data || ['USD']);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch currencies, using defaults:', err);
+        setSupportedCurrencies(['USD', 'EUR', 'GBP', 'CAD', 'AUD']);
+      } finally {
+        setLoadingCurrencies(false);
+      }
+    };
+    
+    fetchCurrencies();
   }, [profile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,6 +66,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       const { error } = await updateProfile({
         name: name.trim(),
         country: country.trim(),
+        currency: currency.trim(),
       });
 
       if (error) {
@@ -252,6 +280,38 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               showFlag={true}
               showPopular={true}
             />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Preferred Currency
+            </label>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none"
+              >
+                {loadingCurrencies ? (
+                  <option value="USD">Loading currencies...</option>
+                ) : (
+                  supportedCurrencies.map(curr => (
+                    <option key={curr} value={curr}>
+                      {curr} {getSymbolFromCurrency(curr) || ''}
+                    </option>
+                  ))
+                )}
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              This will be used for all transactions and reward store items
+            </p>
           </div>
 
           {profile.referral_code && (

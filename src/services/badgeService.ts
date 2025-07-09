@@ -36,21 +36,47 @@ export interface UserBadgeProgress {
  */
 export class BadgeService {
   /**
-   * Fetch all active badges
+   * Fetch all active badges with pagination
    */
-  static async fetchBadges(): Promise<ServiceResponse<Badge[]>> {
+  static async fetchBadges(options: {
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<ServiceResponse<{
+    badges: Badge[];
+    totalCount: number;
+  }>> {
     try {
+      const { limit = 10, offset = 0 } = options;
+      
+      // Fetch badges with pagination
       const { data, error } = await supabase
         .from('badges')
         .select('*')
         .eq('is_active', true)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true })
+        .range(offset, offset + limit - 1);
 
       if (error) {
         return { data: null, error: error.message };
       }
+      
+      // Get total count for pagination
+      const { count, error: countError } = await supabase
+        .from('badges')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true);
+      
+      if (countError) {
+        return { data: null, error: countError.message };
+      }
 
-      return { data: data || [], error: null };
+      return { 
+        data: {
+          badges: data || [],
+          totalCount: count || 0
+        }, 
+        error: null 
+      };
     } catch (error) {
       return {
         data: null,
@@ -145,10 +171,12 @@ export class BadgeService {
   static async getUserBadgeProgress(userId: string): Promise<ServiceResponse<UserBadgeProgress[]>> {
     try {
       // Get all active badges
-      const { data: badges, error: badgesError } = await this.fetchBadges();
-      if (badgesError || !badges) {
+      const { data: badgesData, error: badgesError } = await this.fetchBadges({ limit: 100 });
+      if (badgesError || !badgesData) {
         return { data: null, error: badgesError || 'Failed to fetch badges' };
       }
+      
+      const badges = badgesData.badges;
 
       // Get user profile for current badges and stats
       const { data: profile, error: profileError } = await ProfileService.fetchProfileById(userId);

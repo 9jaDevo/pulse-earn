@@ -18,7 +18,8 @@ import {
   ShoppingBag,
   Package,
   Info,
-  AlertCircle
+  AlertCircle,
+  Globe
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRewards } from '../hooks/useRewards';
@@ -28,6 +29,7 @@ import type { TriviaQuestion, TriviaResult, RedeemItemRequest, RewardStoreItem }
 import { ContentAd } from '../components/ads/ContentAd';
 import { SpinWinModal } from '../components/rewards/SpinWinModal';
 import { useToast } from '../hooks/useToast';
+import getSymbolFromCurrency from 'currency-symbol-map';
 
 export const RewardsPage: React.FC = () => {
   const { user, profile, updateProfile } = useAuth();
@@ -51,6 +53,16 @@ export const RewardsPage: React.FC = () => {
   const [storeItemsLoading, setStoreItemsLoading] = useState(false);
   const [storeItemsError, setStoreItemsError] = useState<string | null>(null);
   const [selectedItemType, setSelectedItemType] = useState<string>('all');
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('USD');
+  const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>(['USD']);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(true);
+
+  // Set initial currency from user profile
+  useEffect(() => {
+    if (profile?.currency) {
+      setSelectedCurrency(profile.currency);
+    }
+  }, [profile]);
 
   // Fetch store items when component mounts or when filter changes
   useEffect(() => {
@@ -60,7 +72,8 @@ export const RewardsPage: React.FC = () => {
       
       try {
         const options: any = {
-          inStock: true
+          inStock: true,
+          currency: selectedCurrency
         };
         
         if (selectedItemType !== 'all') {
@@ -84,10 +97,28 @@ export const RewardsPage: React.FC = () => {
       }
     };
     
+    // Fetch supported currencies
+    const fetchCurrencies = async () => {
+      setLoadingCurrencies(true);
+      try {
+        const { data, error } = await SettingsService.getSupportedCurrencies();
+        if (error) {
+          console.error('Error fetching currencies:', error);
+        } else {
+          setSupportedCurrencies(data || ['USD']);
+        }
+      } catch (err) {
+        console.error('Failed to fetch currencies:', err);
+      } finally {
+        setLoadingCurrencies(false);
+      }
+    };
+    
     if (activeTab === 'store') {
       fetchStoreItems();
+      fetchCurrencies();
     }
-  }, [activeTab, selectedItemType]);
+  }, [activeTab, selectedItemType, selectedCurrency]);
 
   const handleSpin = async () => {
     setSpinLoading(true);
@@ -156,7 +187,16 @@ export const RewardsPage: React.FC = () => {
       return;
     }
     
-    if (profile.points < item.points_cost) {
+    // Calculate points cost in user's preferred currency
+    let pointsCost = item.points_cost;
+    
+    // If the item has an original currency and it's different from the selected currency,
+    // use the original points cost
+    if (item.original_currency && item.original_currency !== selectedCurrency && item.original_points_cost) {
+      pointsCost = item.original_points_cost;
+    }
+    
+    if (profile.points < pointsCost) {
       errorToast('You do not have enough points to redeem this item.');
       return;
     }
@@ -174,7 +214,8 @@ export const RewardsPage: React.FC = () => {
       const fulfillmentDetails: Record<string, any> = {
         redeemedBy: profile.name || user.email,
         redeemedAt: new Date().toISOString(),
-        itemType: item.item_type
+        itemType: item.item_type,
+        currency: item.currency || selectedCurrency
       };
       
       // For physical items, we'll need shipping address later
@@ -195,7 +236,7 @@ export const RewardsPage: React.FC = () => {
       const request: RedeemItemRequest = {
         itemId: item.id,
         itemName: item.name,
-        pointsCost: item.points_cost,
+        pointsCost: pointsCost,
         fulfillmentDetails
       };
       
@@ -212,7 +253,8 @@ export const RewardsPage: React.FC = () => {
         // Refresh the store items to update stock
         const { data } = await getRewardStoreItems({
           inStock: true,
-          itemType: selectedItemType !== 'all' ? selectedItemType : undefined
+          itemType: selectedItemType !== 'all' ? selectedItemType : undefined,
+          currency: selectedCurrency
         });
         
         if (data) {
@@ -258,6 +300,11 @@ export const RewardsPage: React.FC = () => {
       case 'physical_item': return <Package className="h-4 w-4" />;
       default: return <Gift className="h-4 w-4" />;
     }
+  };
+
+  // Get currency symbol
+  const getCurrencySymbol = (currencyCode: string): string => {
+    return getSymbolFromCurrency(currencyCode) || '$';
   };
 
   if (loading) {
@@ -626,34 +673,72 @@ export const RewardsPage: React.FC = () => {
         {/* Store Tab */}
         {activeTab === 'store' && (
           <div className="space-y-6">
-            {/* Item Type Filter */}
+            {/* Currency and Item Type Filters */}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mb-4">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setSelectedItemType('all')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2 ${
-                    selectedItemType === 'all'
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <Gift className="h-4 w-4" />
-                  <span>All Items</span>
-                </button>
-                {['gift_card', 'subscription_code', 'paypal_payout', 'bank_transfer', 'physical_item'].map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => setSelectedItemType(type)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2 ${
-                      selectedItemType === type
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {getItemTypeIcon(type)}
-                    <span>{getItemTypeDisplay(type)}</span>
-                  </button>
-                ))}
+              <div className="flex flex-col md:flex-row gap-4">
+                {/* Currency Selector */}
+                <div className="w-full md:w-auto">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Currency
+                  </label>
+                  <div className="relative">
+                    <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <select
+                      value={selectedCurrency}
+                      onChange={(e) => setSelectedCurrency(e.target.value)}
+                      className="w-full md:w-auto pl-10 pr-10 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none"
+                    >
+                      {loadingCurrencies ? (
+                        <option value="USD">Loading currencies...</option>
+                      ) : (
+                        supportedCurrencies.map(curr => (
+                          <option key={curr} value={curr}>
+                            {curr} {getCurrencySymbol(curr)}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Item Type Filter */}
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Item Type
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setSelectedItemType('all')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2 ${
+                        selectedItemType === 'all'
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Gift className="h-4 w-4" />
+                      <span>All Items</span>
+                    </button>
+                    {['gift_card', 'subscription_code', 'paypal_payout', 'bank_transfer', 'physical_item'].map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setSelectedItemType(type)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2 ${
+                          selectedItemType === type
+                            ? 'bg-primary-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {getItemTypeIcon(type)}
+                        <span>{getItemTypeDisplay(type)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -685,8 +770,8 @@ export const RewardsPage: React.FC = () => {
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No items available</h3>
                 <p className="text-gray-600 mb-4">
                   {selectedItemType !== 'all' 
-                    ? `No ${getItemTypeDisplay(selectedItemType).toLowerCase()} are currently available.`
-                    : 'There are no items available in the store right now.'}
+                    ? `No ${getItemTypeDisplay(selectedItemType).toLowerCase()} are currently available in ${selectedCurrency}.`
+                    : `There are no items available in ${selectedCurrency} right now.`}
                 </p>
                 {selectedItemType !== 'all' && (
                   <button
@@ -702,66 +787,79 @@ export const RewardsPage: React.FC = () => {
             {/* Items Grid */}
             {!storeItemsLoading && !storeItemsError && storeItems.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {storeItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 transition-all hover:shadow-lg hover:-translate-y-1"
-                  >
-                    <div className="text-center mb-4">
-                      <div className="text-6xl mb-3">{item.image_url || '🎁'}</div>
-                      <span className="bg-primary-100 text-primary-700 px-2 py-1 rounded-md text-xs font-medium">
-                        {getItemTypeDisplay(item.item_type)}
-                      </span>
-                    </div>
-                    
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">{item.name}</h3>
-                    <p className="text-center text-gray-600 mb-4">{item.value}</p>
-                    
-                    {item.description && (
-                      <p className="text-sm text-gray-500 mb-4 text-center">{item.description}</p>
-                    )}
-                    
-                    <div className="flex justify-between items-center mb-4">
-                      <span className="text-2xl font-bold text-primary-600">{item.points_cost.toLocaleString()}</span>
-                      <span className="text-gray-600">points</span>
-                    </div>
-                    
-                    {item.stock_quantity !== null && (
-                      <div className="flex justify-between items-center mb-4 text-sm">
-                        <span className="text-gray-500">Stock:</span>
-                        <span className={`font-medium ${item.stock_quantity > 10 ? 'text-success-600' : item.stock_quantity > 0 ? 'text-warning-600' : 'text-error-600'}`}>
-                          {item.stock_quantity > 0 ? `${item.stock_quantity} remaining` : 'Out of stock'}
+                {storeItems.map((item) => {
+                  // Get the appropriate currency symbol
+                  const itemCurrency = item.currency || selectedCurrency;
+                  const itemSymbol = getCurrencySymbol(itemCurrency);
+                  
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 transition-all hover:shadow-lg hover:-translate-y-1"
+                    >
+                      <div className="text-center mb-4">
+                        <div className="text-6xl mb-3">{item.image_url || '🎁'}</div>
+                        <span className="bg-primary-100 text-primary-700 px-2 py-1 rounded-md text-xs font-medium">
+                          {getItemTypeDisplay(item.item_type)}
                         </span>
                       </div>
-                    )}
-                    
-                    {item.fulfillment_instructions && (
-                      <div className="bg-gray-50 p-3 rounded-lg mb-4 flex items-start space-x-2">
-                        <Info className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
-                        <p className="text-xs text-gray-500">{item.fulfillment_instructions}</p>
+                      
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">{item.name}</h3>
+                      <p className="text-center text-gray-600 mb-4">{item.value}</p>
+                      
+                      {item.description && (
+                        <p className="text-sm text-gray-500 mb-4 text-center">{item.description}</p>
+                      )}
+                      
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="text-2xl font-bold text-primary-600">{item.points_cost.toLocaleString()}</span>
+                        <span className="text-gray-600">points</span>
                       </div>
-                    )}
-                    
-                    <button
-                      onClick={() => handleRedeem(item)}
-                      disabled={totalPoints < item.points_cost || redeemingItem === item.id || (item.stock_quantity !== null && item.stock_quantity <= 0)}
-                      className={`w-full py-3 rounded-lg font-medium transition-all ${
-                        totalPoints >= item.points_cost && redeemingItem !== item.id && (item.stock_quantity === null || item.stock_quantity > 0)
-                          ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 transform hover:scale-105'
-                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      {redeemingItem === item.id
-                        ? 'Processing...'
-                        : item.stock_quantity !== null && item.stock_quantity <= 0
-                        ? 'Out of Stock'
-                        : totalPoints < item.points_cost
-                        ? 'Insufficient Points'
-                        : 'Redeem Now'
-                      }
-                    </button>
-                  </div>
-                ))}
+                      
+                      {/* Show original currency if different */}
+                      {item.original_currency && item.original_currency !== selectedCurrency && item.original_points_cost && (
+                        <div className="text-xs text-gray-500 mb-4">
+                          Original price: {item.original_points_cost.toLocaleString()} points in {item.original_currency} ({getCurrencySymbol(item.original_currency)})
+                        </div>
+                      )}
+                      
+                      {item.stock_quantity !== null && (
+                        <div className="flex justify-between items-center mb-4 text-sm">
+                          <span className="text-gray-500">Stock:</span>
+                          <span className={`font-medium ${item.stock_quantity > 10 ? 'text-success-600' : item.stock_quantity > 0 ? 'text-warning-600' : 'text-error-600'}`}>
+                            {item.stock_quantity > 0 ? `${item.stock_quantity} remaining` : 'Out of stock'}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {item.fulfillment_instructions && (
+                        <div className="bg-gray-50 p-3 rounded-lg mb-4 flex items-start space-x-2">
+                          <Info className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                          <p className="text-xs text-gray-500">{item.fulfillment_instructions}</p>
+                        </div>
+                      )}
+                      
+                      <button
+                        onClick={() => handleRedeem(item)}
+                        disabled={totalPoints < item.points_cost || redeemingItem === item.id || (item.stock_quantity !== null && item.stock_quantity <= 0)}
+                        className={`w-full py-3 rounded-lg font-medium transition-all ${
+                          totalPoints >= item.points_cost && redeemingItem !== item.id && (item.stock_quantity === null || item.stock_quantity > 0)
+                            ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 transform hover:scale-105'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        {redeemingItem === item.id
+                          ? 'Processing...'
+                          : item.stock_quantity !== null && item.stock_quantity <= 0
+                          ? 'Out of Stock'
+                          : totalPoints < item.points_cost
+                          ? 'Insufficient Points'
+                          : 'Redeem Now'
+                        }
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -831,6 +929,11 @@ export const RewardsPage: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{item.points_cost.toLocaleString()}</div>
+                          {item.currency && (
+                            <div className="text-xs text-gray-500">
+                              {item.currency} {getCurrencySymbol(item.currency)}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${

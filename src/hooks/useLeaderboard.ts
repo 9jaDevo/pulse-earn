@@ -34,7 +34,7 @@ export const useLeaderboard = () => {
       setError(serviceError);
     } else {
       // Add rank to each entry
-      const leaderboard = (data || []).map((profile, index) => ({
+      const leaderboard = (data?.profiles || []).map((profile, index) => ({
         ...profile,
         rank: index + 1
       }));
@@ -59,7 +59,7 @@ export const useLeaderboard = () => {
       setError(serviceError);
     } else {
       // Add rank to each entry
-      const leaderboard = (data || []).map((profile, index) => ({
+      const leaderboard = (data?.profiles || []).map((profile, index) => ({
         ...profile,
         rank: index + 1
       }));
@@ -122,7 +122,7 @@ export const useLeaderboard = () => {
         return { success: false, error: profilesError };
       }
       
-      const profiles = allProfiles || [];
+      const profiles = allProfiles?.profiles || [];
       const totalUsers = profiles.length;
       const averagePoints = profiles.length > 0 
         ? Math.round(profiles.reduce((sum, p) => sum + p.points, 0) / profiles.length)

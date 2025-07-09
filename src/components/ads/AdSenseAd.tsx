@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useAds } from '../../contexts/AdContext';
 
 interface AdSenseAdProps {
   slot: string;
@@ -28,7 +29,8 @@ export const AdSenseAd: React.FC<AdSenseAdProps> = ({
   const location = useLocation();
   const [adKey, setAdKey] = useState(0);
   const [pageVisits, setPageVisits] = useState(0);
-  const clientId = import.meta.env.VITE_ADSENSE_CLIENT_ID;
+  const { adsEnabled, adsenseClientId } = useAds();
+  const [scriptLoaded, setScriptLoaded] = useState(false);
 
   // Track page visits for ad refresh
   useEffect(() => {
@@ -42,8 +44,55 @@ export const AdSenseAd: React.FC<AdSenseAdProps> = ({
     }
   }, [location.pathname]);
 
+  // Dynamically load AdSense script when settings are available
   useEffect(() => {
-    if (!clientId || !slot) return;
+    // Validate client ID format
+    const isValidClientId = adsenseClientId && 
+      adsenseClientId.startsWith('ca-pub-') && 
+      adsenseClientId !== 'ca-pub-xxxxxxxxxxxxxxxxxx' &&
+      !adsenseClientId.includes('placeholder');
+    
+    if (adsEnabled && isValidClientId && !scriptLoaded) {
+      // Check if script is already loaded
+      const existingScript = document.querySelector(`script[src*="adsbygoogle.js"]`);
+      if (existingScript) {
+        setScriptLoaded(true);
+        return;
+      }
+      
+      // Create and append the script
+      const script = document.createElement('script');
+      script.async = true;
+      script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`;
+      script.crossOrigin = 'anonymous';
+      
+      script.onload = () => {
+        setScriptLoaded(true);
+        console.log('AdSense script loaded successfully');
+      };
+      
+      script.onerror = (error) => {
+        console.error('Error loading AdSense script. This may be due to:', {
+          error,
+          clientId: adsenseClientId,
+          possibleCauses: [
+            'Invalid AdSense client ID',
+            'AdSense account not approved',
+            'Ad blockers preventing script load',
+            'Network connectivity issues'
+          ]
+        });
+      };
+      
+      document.head.appendChild(script);
+    } else if (adsEnabled && adsenseClientId && !adsenseClientId.startsWith('ca-pub-')) {
+      console.warn('[AdSense] Invalid client ID format. Expected format: ca-pub-xxxxxxxxxxxxxxxxxx');
+    }
+  }, [adsEnabled, adsenseClientId, scriptLoaded]);
+
+  // Initialize ad when settings and script are ready
+  useEffect(() => {
+    if (!adsEnabled || !adsenseClientId || !scriptLoaded || !slot) return;
 
     const loadAd = () => {
       try {
@@ -65,9 +114,10 @@ export const AdSenseAd: React.FC<AdSenseAdProps> = ({
     // Small delay to ensure DOM is ready
     const timer = setTimeout(loadAd, 100);
     return () => clearTimeout(timer);
-  }, [clientId, slot, adKey]);
+  }, [adsEnabled, adsenseClientId, scriptLoaded, slot, adKey]);
 
-  if (!clientId || !slot) {
+  // Don't render anything if AdSense is disabled or client ID is missing
+  if (!adsEnabled || !adsenseClientId || !slot) {
     return null;
   }
 
@@ -117,7 +167,7 @@ export const AdSenseAd: React.FC<AdSenseAdProps> = ({
       <ins
         className="adsbygoogle"
         style={getAdStyle()}
-        data-ad-client={clientId}
+        data-ad-client={adsenseClientId}
         data-ad-slot={slot}
         data-ad-format={getDataAdFormat()}
         data-full-width-responsive={responsive ? 'true' : 'false'}

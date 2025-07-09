@@ -11,10 +11,8 @@ import {
   XCircle,
   Crown,
   Star,
-  User,
-  Globe,
-  Zap,
-  AlertTriangle,
+  Target,
+  User as UserIcon,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -23,6 +21,7 @@ import { Database } from '../../lib/supabase';
 import { useToast } from '../../hooks/useToast';
 import { CountrySelect } from '../ui/CountrySelect';
 import { useAuth } from '../../contexts/AuthContext';
+import { Pagination } from '../ui/Pagination';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -88,7 +87,10 @@ export const UserManagement: React.FC = () => {
   };
 
   const handleUpdateUser = async () => {
-    if (!selectedUser || !user) return;
+    if (!selectedUser || !user) {
+      errorToast('No user selected or you are not logged in');
+      return;
+    }
     
     setEditLoading(true);
     
@@ -135,25 +137,24 @@ export const UserManagement: React.FC = () => {
     if (!user) return;
     
     try {
-      const newStatus = !currentStatus;
       const { data, error } = await ProfileService.adminUpdateUserProfile(
         user.id,
         userId,
-        { is_suspended: newStatus }
+        { is_suspended: !currentStatus }
       );
       
       if (error) {
-        errorToast(`Failed to ${newStatus ? 'suspend' : 'unsuspend'} user: ${error}`);
+        errorToast(`Failed to ${!currentStatus ? 'suspend' : 'unsuspend'} user: ${error}`);
         return;
       }
       
       if (data) {
         // Update local state
         setUsers(prev => prev.map(u => 
-          u.id === userId ? { ...u, is_suspended: newStatus } : u
+          u.id === userId ? { ...u, is_suspended: !currentStatus } : u
         ));
         
-        successToast(`User ${data.name || data.email} ${newStatus ? 'suspended' : 'unsuspended'} successfully`);
+        successToast(`User ${data.name || data.email} ${!currentStatus ? 'suspended' : 'unsuspended'} successfully`);
       }
     } catch (err) {
       errorToast('An unexpected error occurred');
@@ -170,7 +171,7 @@ export const UserManagement: React.FC = () => {
       case 'moderator':
         return <Shield className="h-4 w-4 text-warning-600" />;
       default:
-        return <User className="h-4 w-4 text-gray-600" />;
+        return <UserIcon className="h-4 w-4 text-gray-600" />;
     }
   };
 
@@ -193,18 +194,6 @@ export const UserManagement: React.FC = () => {
       user.email.toLowerCase().includes(searchTerm.toLowerCase()));
     return matchesSearch;
   });
-
-  // Calculate pagination
-  const totalPages = Math.ceil(totalUsers / usersPerPage);
-  const canGoPrevious = currentPage > 1;
-  const canGoNext = currentPage < totalPages;
-
-  // Handle page changes
-  const goToPage = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    }
-  };
 
   if (loading && users.length === 0) {
     return (
@@ -410,108 +399,13 @@ export const UserManagement: React.FC = () => {
           </div>
         )}
 
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-            <div className="flex-1 flex justify-between sm:hidden">
-              <button
-                onClick={() => goToPage(currentPage - 1)}
-                disabled={!canGoPrevious}
-                className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
-                  canGoPrevious 
-                    ? 'bg-white text-gray-700 hover:bg-gray-50' 
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => goToPage(currentPage + 1)}
-                disabled={!canGoNext}
-                className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
-                  canGoNext 
-                    ? 'bg-white text-gray-700 hover:bg-gray-50' 
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                Next
-              </button>
-            </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{(currentPage - 1) * usersPerPage + 1}</span> to{' '}
-                  <span className="font-medium">
-                    {Math.min(currentPage * usersPerPage, totalUsers)}
-                  </span>{' '}
-                  of <span className="font-medium">{totalUsers}</span> users
-                </p>
-              </div>
-              <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                  <button
-                    onClick={() => goToPage(currentPage - 1)}
-                    disabled={!canGoPrevious}
-                    className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 text-sm font-medium ${
-                      canGoPrevious 
-                        ? 'bg-white text-gray-500 hover:bg-gray-50' 
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    <span className="sr-only">Previous</span>
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  
-                  {/* Page numbers */}
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    // Show pages around current page
-                    let pageNum;
-                    if (totalPages <= 5) {
-                      // If 5 or fewer pages, show all
-                      pageNum = i + 1;
-                    } else if (currentPage <= 3) {
-                      // If near start, show first 5 pages
-                      pageNum = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      // If near end, show last 5 pages
-                      pageNum = totalPages - 4 + i;
-                    } else {
-                      // Otherwise show current page and 2 pages on each side
-                      pageNum = currentPage - 2 + i;
-                    }
-                    
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => goToPage(pageNum)}
-                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                          currentPage === pageNum
-                            ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
-                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
-                  
-                  <button
-                    onClick={() => goToPage(currentPage + 1)}
-                    disabled={!canGoNext}
-                    className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${
-                      canGoNext 
-                        ? 'bg-white text-gray-500 hover:bg-gray-50' 
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    <span className="sr-only">Next</span>
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                </nav>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Pagination */}
+        <Pagination
+          currentPage={currentPage}
+          totalItems={totalUsers}
+          itemsPerPage={usersPerPage}
+          onPageChange={setCurrentPage}
+        />
       </div>
 
       {/* Edit User Modal */}
@@ -549,7 +443,7 @@ export const UserManagement: React.FC = () => {
                   Name
                 </label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                   <input
                     type="text"
                     value={editForm.name}
@@ -581,12 +475,11 @@ export const UserManagement: React.FC = () => {
                   Points
                 </label>
                 <div className="relative">
-                  <Zap className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                   <input
                     type="number"
                     value={editForm.points}
                     onChange={(e) => setEditForm(prev => ({ ...prev, points: parseInt(e.target.value) || 0 }))}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     placeholder="User's points"
                   />
                 </div>
@@ -642,7 +535,7 @@ export const UserManagement: React.FC = () => {
                 </div>
                 {editForm.is_suspended && (
                   <div className="mt-3 flex items-start space-x-2">
-                    <AlertTriangle className="h-5 w-5 text-error-500 flex-shrink-0 mt-0.5" />
+                    <AlertCircle className="h-5 w-5 text-error-500 flex-shrink-0 mt-0.5" />
                     <p className="text-sm text-error-600">
                       Suspended users cannot log in or interact with the platform until unsuspended.
                     </p>

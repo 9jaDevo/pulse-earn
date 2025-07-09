@@ -37,6 +37,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const [theme, setThemeState] = useState<Theme>(getSavedTheme);
+  const [allowThemeSelection, setAllowThemeSelection] = useState<boolean>(true);
 
   // Apply theme to document when it changes
   useEffect(() => {
@@ -51,6 +52,40 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Save to localStorage
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Load settings after component mounts to avoid context dependency issues
+  useEffect(() => {
+    const loadSettingsAsync = async () => {
+      try {
+        const settingsModule = await import('../services/settingsService');
+        const result = await settingsModule.SettingsService.getSettings('general');
+        const data = result.data;
+        
+        if (data && !result.error) {
+          // Update theme selection permission
+          if (data.allowThemeSelection !== undefined) {
+            setAllowThemeSelection(data.allowThemeSelection);
+          }
+          
+          // Only update theme if user hasn't explicitly set a preference
+          if (!localStorage.getItem('theme')) {
+            if (data.defaultTheme === 'system') {
+              // Use system preference
+              const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+              setThemeState(isDarkMode ? 'dark' : 'light');
+            } else if (data.defaultTheme === 'light' || data.defaultTheme === 'dark') {
+              setThemeState(data.defaultTheme);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('Could not load theme settings from database, using defaults:', error);
+        // Continue with default behavior
+      }
+    };
+
+    loadSettingsAsync();
+  }, []);
 
   // Listen for system preference changes
   useEffect(() => {
@@ -68,11 +103,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const toggleTheme = () => {
-    setThemeState(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
+    // Only allow toggling if theme selection is enabled in settings
+    if (allowThemeSelection) {
+      setThemeState(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
+    }
   };
 
   const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
+    // Only allow setting if theme selection is enabled in settings
+    if (allowThemeSelection) {
+      setThemeState(newTheme);
+    }
   };
 
   return (

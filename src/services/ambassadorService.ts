@@ -1,6 +1,7 @@
 import { supabase, Database } from '../lib/supabase';
+import { PayoutService } from './payoutService';
 import type { ServiceResponse } from './profileService';
-import type { AmbassadorDetails, CountryMetric, AmbassadorStats } from '../types/api';
+import type { AmbassadorDetails, CountryMetric, AmbassadorStats, CommissionTier } from '../types/api';
 
 type AmbassadorRow = Database['public']['Tables']['ambassadors']['Row'];
 type CountryMetricRow = Database['public']['Tables']['country_metrics']['Row'];
@@ -98,14 +99,34 @@ export class AmbassadorService {
         return { data: null, error: ambassadorError || 'Ambassador not found' };
       }
 
-      // Get current month metrics
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+      // Get ambassador tier information
+      const { data: tierInfo, error: tierError } = await supabase
+        .rpc('get_ambassador_tier', { p_ambassador_id: userId });
+      
+      if (tierError) {
+        console.error('Error getting ambassador tier:', tierError);
+        // Continue with basic stats even if tier info fails
+      }
+
+      // Get current month metrics with proper date calculation
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth(); // 0-based month
+      
+      // Calculate first day of current month
+      const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+      const firstDayString = firstDayOfMonth.toISOString().split('T')[0];
+      
+      // Calculate first day of next month (to use as upper bound)
+      const firstDayOfNextMonth = new Date(currentYear, currentMonth + 1, 1);
+      const firstDayOfNextMonthString = firstDayOfNextMonth.toISOString().split('T')[0];
+
       const { data: monthlyMetrics } = await supabase
         .from('country_metrics')
         .select('ad_revenue')
         .eq('country', ambassador.country)
-        .gte('metric_date', `${currentMonth}-01`)
-        .lte('metric_date', `${currentMonth}-31`);
+        .gte('metric_date', firstDayString)
+        .lt('metric_date', firstDayOfNextMonthString);
 
       const monthlyRevenue = (monthlyMetrics || []).reduce((sum, metric) => sum + metric.ad_revenue, 0);
       const monthlyEarnings = monthlyRevenue * (ambassador.commission_rate / 100);
@@ -123,14 +144,26 @@ export class AmbassadorService {
         .order('total_earnings', { ascending: false });
 
       const countryRank = (allAmbassadors || []).findIndex(a => a.total_earnings <= ambassador.total_earnings) + 1;
+      
+      // Get payable balance
+      const { data: payableBalance } = await PayoutService.getPayableBalance(userId);
 
+      // Prepare stats object
       const stats: AmbassadorStats = {
         totalReferrals: ambassador.total_referrals,
         totalEarnings: ambassador.total_earnings,
         monthlyEarnings,
         conversionRate,
-        countryRank: countryRank || 1
+        countryRank: countryRank || 1,
+        payableBalance: payableBalance || 0
       };
+
+      // Add tier information if available
+      if (tierInfo && tierInfo.found) {
+        stats.tierName = tierInfo.tier_name;
+        stats.nextTierName = tierInfo.next_tier_name;
+        stats.referralsToNextTier = tierInfo.referrals_to_next_tier;
+      }
 
       return { data: stats, error: null };
     } catch (error) {
@@ -178,15 +211,20 @@ export class AmbassadorService {
   static async getAllAmbassadors(
     options: {
       limit?: number;
+      offset?: number;
       country?: string;
       isActive?: boolean;
       orderBy?: 'total_earnings' | 'total_referrals' | 'created_at';
       order?: 'asc' | 'desc';
     } = {}
-  ): Promise<ServiceResponse<AmbassadorDetails[]>> {
+  ): Promise<ServiceResponse<{
+    ambassadors: AmbassadorDetails[];
+    totalCount: number;
+  }>> {
     try {
       const { 
         limit = 50, 
+        offset = 0,
         country, 
         isActive, 
         orderBy = 'total_earnings', 
@@ -195,9 +233,9 @@ export class AmbassadorService {
 
       let query = supabase
         .from('ambassadors')
-        .select('*')
+        .select('*', { count: 'exact' })
         .order(orderBy, { ascending: order === 'asc' })
-        .limit(limit);
+        .range(offset, offset + limit - 1);
 
       if (country) {
         query = query.eq('country', country);
@@ -207,13 +245,19 @@ export class AmbassadorService {
         query = query.eq('is_active', isActive);
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
 
       if (error) {
         return { data: null, error: error.message };
       }
 
-      return { data: data || [], error: null };
+      return { 
+        data: { 
+          ambassadors: data || [], 
+          totalCount: count || 0 
+        }, 
+        error: null 
+      };
     } catch (error) {
       return {
         data: null,
@@ -294,6 +338,53 @@ export class AmbassadorService {
   }
 
   /**
+   * Process ad revenue commission
+   */
+  static async processAdRevenueCommission(
+    referrerId: string,
+    amount: number,
+    country?: string
+  ): Promise<ServiceResponse<{
+    commissionAmount: number;
+    commissionRate: number;
+  }>> {
+    try {
+      // Call the process_referral_commission function
+      const { data, error } = await supabase
+        .rpc('process_referral_commission', {
+          p_referrer_id: referrerId,
+          p_referred_id: null, // Not needed for ad revenue
+          p_amount: amount,
+          p_country: country
+        });
+      
+      if (error) {
+        return { data: null, error: error.message };
+      }
+      
+      // Get the commission rate used
+      const { data: rateData } = await supabase
+        .rpc('calculate_ambassador_commission', {
+          p_ambassador_id: referrerId,
+          p_country: country
+        });
+      
+      return { 
+        data: {
+          commissionAmount: data,
+          commissionRate: rateData || 0
+        }, 
+        error: null 
+      };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to process commission'
+      };
+    }
+  }
+
+  /**
    * Get ambassador dashboard data
    */
   static async getAmbassadorDashboard(userId: string): Promise<ServiceResponse<{
@@ -301,19 +392,22 @@ export class AmbassadorService {
     stats: AmbassadorStats;
     recentMetrics: CountryMetric[];
     topCountries: { country: string; value: number }[];
+    payoutHistory: any[];
   }>> {
     try {
       // Get all data in parallel
       const [
         ambassadorResult,
         statsResult,
-        metricsResult,
-        topCountriesResult
+        tierInfoResult,
+        topCountriesResult,
+        payoutResult
       ] = await Promise.all([
         this.getAmbassadorDetails(userId),
         this.getAmbassadorStats(userId),
-        this.getCountryMetrics('', { limit: 7 }), // Get recent metrics
-        this.getTopCountries('ad_revenue', 5)
+        supabase.rpc('get_ambassador_tier', { p_ambassador_id: userId }),
+        this.getTopCountries('ad_revenue', 5),
+        PayoutService.getUserPayoutRequests(userId, { limit: 5 })
       ]);
 
       if (ambassadorResult.error) {
@@ -329,19 +423,32 @@ export class AmbassadorService {
         ambassadorResult.data.country,
         { limit: 7 }
       );
+      
+      // Enhance stats with tier information if available
+      let enhancedStats = statsResult.data || {
+        totalReferrals: 0,
+        totalEarnings: 0,
+        monthlyEarnings: 0,
+        conversionRate: 0,
+        countryRank: 1
+      };
+      
+      if (tierInfoResult.data && tierInfoResult.data.found) {
+        enhancedStats = {
+          ...enhancedStats,
+          tierName: tierInfoResult.data.tier_name,
+          nextTierName: tierInfoResult.data.next_tier_name,
+          referralsToNextTier: tierInfoResult.data.referrals_to_next_tier
+        };
+      }
 
       return {
         data: {
           ambassador: ambassadorResult.data,
-          stats: statsResult.data || {
-            totalReferrals: 0,
-            totalEarnings: 0,
-            monthlyEarnings: 0,
-            conversionRate: 0,
-            countryRank: 1
-          },
+          stats: enhancedStats,
           recentMetrics: countryMetrics || [],
-          topCountries: topCountriesResult.data || []
+          topCountries: topCountriesResult.data || [],
+          payoutHistory: payoutResult.data?.requests || []
         },
         error: null
       };
@@ -349,6 +456,187 @@ export class AmbassadorService {
       return {
         data: null,
         error: error instanceof Error ? error.message : 'Failed to get ambassador dashboard'
+      };
+    }
+  }
+  
+  /**
+   * Get commission tiers
+   */
+  static async getCommissionTiers(
+    options: {
+      limit?: number;
+      offset?: number;
+      isActive?: boolean;
+    } = {}
+  ): Promise<ServiceResponse<{
+    tiers: CommissionTier[];
+    totalCount: number;
+  }>> {
+    try {
+      const { limit = 50, offset = 0, isActive } = options;
+      
+      let query = supabase
+        .from('ambassador_commission_tiers')
+        .select('*', { count: 'exact' })
+        .order('min_referrals', { ascending: true })
+        .range(offset, offset + limit - 1);
+      
+      if (isActive !== undefined) {
+        query = query.eq('is_active', isActive);
+      }
+      
+      const { data, error, count } = await query;
+      
+      if (error) {
+        return { data: null, error: error.message };
+      }
+      
+      return {
+        data: {
+          tiers: data || [],
+          totalCount: count || 0
+        },
+        error: null
+      };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get commission tiers'
+      };
+    }
+  }
+  
+  /**
+   * Create commission tier
+   */
+  static async createCommissionTier(
+    adminId: string,
+    tierData: {
+      name: string;
+      min_referrals: number;
+      global_rate: number;
+      country_rates?: Record<string, number>;
+    }
+  ): Promise<ServiceResponse<CommissionTier>> {
+    try {
+      // Check if user is admin
+      const { data: adminProfile, error: adminError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .single();
+      
+      if (adminError || !adminProfile || adminProfile.role !== 'admin') {
+        return { data: null, error: 'Unauthorized: Only admins can manage commission tiers' };
+      }
+      
+      const { data, error } = await supabase
+        .from('ambassador_commission_tiers')
+        .insert({
+          name: tierData.name,
+          min_referrals: tierData.min_referrals,
+          global_rate: tierData.global_rate,
+          country_rates: tierData.country_rates || {}
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        return { data: null, error: error.message };
+      }
+      
+      return { data, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to create commission tier'
+      };
+    }
+  }
+  
+  /**
+   * Update commission tier
+   */
+  static async updateCommissionTier(
+    adminId: string,
+    tierId: string,
+    updates: {
+      name?: string;
+      min_referrals?: number;
+      global_rate?: number;
+      country_rates?: Record<string, number>;
+      is_active?: boolean;
+    }
+  ): Promise<ServiceResponse<CommissionTier>> {
+    try {
+      // Check if user is admin
+      const { data: adminProfile, error: adminError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .single();
+      
+      if (adminError || !adminProfile || adminProfile.role !== 'admin') {
+        return { data: null, error: 'Unauthorized: Only admins can manage commission tiers' };
+      }
+      
+      const { data, error } = await supabase
+        .from('ambassador_commission_tiers')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', tierId)
+        .select()
+        .single();
+      
+      if (error) {
+        return { data: null, error: error.message };
+      }
+      
+      return { data, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to update commission tier'
+      };
+    }
+  }
+  
+  /**
+   * Delete commission tier
+   */
+  static async deleteCommissionTier(
+    adminId: string,
+    tierId: string
+  ): Promise<ServiceResponse<boolean>> {
+    try {
+      // Check if user is admin
+      const { data: adminProfile, error: adminError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .single();
+      
+      if (adminError || !adminProfile || adminProfile.role !== 'admin') {
+        return { data: null, error: 'Unauthorized: Only admins can manage commission tiers' };
+      }
+      
+      const { error } = await supabase
+        .from('ambassador_commission_tiers')
+        .delete()
+        .eq('id', tierId);
+      
+      if (error) {
+        return { data: null, error: error.message };
+      }
+      
+      return { data: true, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to delete commission tier'
       };
     }
   }
@@ -363,5 +651,10 @@ export const {
   getAllAmbassadors,
   getTopCountries,
   recordReferral,
-  getAmbassadorDashboard
+  getAmbassadorDashboard,
+  processAdRevenueCommission,
+  getCommissionTiers,
+  createCommissionTier,
+  updateCommissionTier,
+  deleteCommissionTier
 } = AmbassadorService;

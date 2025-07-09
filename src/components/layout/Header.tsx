@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, X, Zap, User, Trophy, Gift, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { AuthModal } from '../auth/AuthModal';
 import { ProfileModal } from '../profile/ProfileModal';
 import { HeaderAd } from '../ads/HeaderAd';
@@ -16,6 +17,7 @@ export const Header: React.FC = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { user, profile, signOut } = useAuth();
   const { theme } = useTheme();
+  const { generalSettings } = useSettings();
 
   const navigation = [
     { name: 'Home', href: '/' },
@@ -37,12 +39,22 @@ export const Header: React.FC = () => {
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-2 group">
-              <div className="bg-gradient-to-r from-primary-500 to-secondary-500 p-2 rounded-lg group-hover:scale-105 transition-transform">
-                <Zap className="h-6 w-6 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
-                PulseEarn
-              </span>
+              {generalSettings.logoUrl ? (
+                <img 
+                  src={generalSettings.logoUrl} 
+                  alt={generalSettings.platformName || "PulseEarn"} 
+                  className="h-10 w-auto group-hover:scale-105 transition-transform"
+                />
+              ) : (
+                <>
+                  <div className="bg-gradient-to-r from-primary-500 to-secondary-500 p-2 rounded-lg group-hover:scale-105 transition-transform">
+                    <Zap className="h-6 w-6 text-white" />
+                  </div>
+                  <span className="text-xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                    {generalSettings.platformName || "PulseEarn"}
+                  </span>
+                </>
+              )}
             </Link>
 
             {/* Desktop Navigation */}
@@ -79,7 +91,9 @@ export const Header: React.FC = () => {
             {/* User Actions */}
             <div className="hidden md:flex items-center space-x-4">
               {/* Theme Toggle */}
-              <ThemeToggle />
+              {generalSettings.allowThemeSelection !== false && (
+                <ThemeToggle />
+              )}
               
               {user && profile ? (
                 <>
@@ -156,7 +170,9 @@ export const Header: React.FC = () => {
 
             {/* Mobile menu button */}
             <div className="md:hidden flex items-center space-x-2">
-              <ThemeToggle variant="minimal" />
+              {generalSettings.allowThemeSelection !== false && (
+                <ThemeToggle variant="minimal" />
+              )}
               <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="p-2 rounded-md text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"

@@ -3,6 +3,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase, Database } from '../lib/supabase'
 import { ProfileService } from '../services/profileService'
+import { ReferralService } from '../services/referralService'
+import { SettingsService } from '../services/settingsService'
 import { useToast } from '../hooks/useToast'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -123,9 +125,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     referralCode?: string
   ) => {
     try {
+      // Get referral bonus points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const referralBonusPoints = pointsSettings?.referralBonusPoints || 100; // Default to 100 if not set
+
+      // Validate referral code if provided
+      let referrerId: string | undefined;
+      if (referralCode) {
+        const { data: referralData, error: referralError } = await ReferralService.validateReferralCode(referralCode);
+        
+        if (referralError) {
+          console.error('[Auth] Error validating referral code:', referralError);
+        } else if (referralData?.valid) {
+          referrerId = referralData.referrerId;
+        }
+      }
+
       const userData: Record<string, any> = { name }
       if (country) userData.country = country
-      if (referralCode) userData.referred_by_code = referralCode
+      if (referrerId) userData.referred_by = referrerId
 
       const { error } = await supabase.auth.signUp({
         email,
@@ -135,6 +153,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         throw error
+      }
+
+      // If there was a valid referral, process the bonus
+      if (referrerId && user) {
+        try {
+          await ReferralService.processReferralBonus(referrerId, user.id);
+          successToast(`Signed up with referral code! You earned ${referralBonusPoints} bonus points.`);
+        } catch (err) {
+          console.error('[Auth] Error processing referral bonus:', err);
+          // Continue even if referral processing fails
+        }
       }
 
       successToast('Account created successfully! You are now signed in.')

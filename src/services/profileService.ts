@@ -36,10 +36,11 @@ export class ProfileService {
         errorMessage: error?.message
       });
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         return { data: null, error: error.message };
       }
 
+      // maybeSingle() returns the profile object directly or null if no profile found
       return { data, error: null };
     } catch (error) {
       console.error('[ProfileService] Exception in fetchProfileById:', error);
@@ -107,6 +108,10 @@ export class ProfileService {
         return { data: null, error: error.message };
       }
 
+      if (!data) {
+        return { data: null, error: 'Profile not found' };
+      }
+
       return { data, error: null };
     } catch (error) {
       return { 
@@ -128,13 +133,20 @@ export class ProfileService {
     console.log('[ProfileService] Admin updating profile for user:', userId, 'by admin:', adminId, 'with updates:', updates);
     try {
       // First check if the requesting user is an admin
-      const { data: adminProfile, error: adminError } = await supabase
+      const { data: adminData, error: adminError } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', adminId)
         .maybeSingle();
 
-      if (adminError || !adminProfile || adminProfile.role !== 'admin') {
+      if (adminError) {
+        return { 
+          data: null, 
+          error: adminError.message 
+        };
+      }
+
+      if (!adminData || adminData.role !== 'admin') {
         return { 
           data: null, 
           error: 'Unauthorized: Only admins can perform this action' 
@@ -198,6 +210,7 @@ export class ProfileService {
       order?: 'asc' | 'desc';
       role?: Profile['role'];
       country?: string;
+      currency?: string;
     } = {}
   ): Promise<ServiceResponse<{
     profiles: Profile[];
@@ -205,7 +218,15 @@ export class ProfileService {
   }>> {
     console.log('[ProfileService] Fetching profiles with options:', options);
     try {
-      const { limit = 50, offset = 0, orderBy = 'points', order = 'desc', role, country } = options;
+      const { 
+        limit = 50, 
+        offset = 0, 
+        orderBy = 'points', 
+        order = 'desc', 
+        role, 
+        country,
+        currency
+      } = options;
 
       // Build the query for profiles
       let query = supabase
@@ -222,6 +243,10 @@ export class ProfileService {
         query = query.eq('country', country);
       }
 
+      if (currency) {
+        query = query.eq('currency', currency);
+      }
+
       // Get total count in a separate query
       let countQuery = supabase
         .from('profiles')
@@ -233,6 +258,10 @@ export class ProfileService {
 
       if (country) {
         countQuery = countQuery.eq('country', country);
+      }
+
+      if (currency) {
+        countQuery = countQuery.eq('currency', currency);
       }
 
       // Run both queries in parallel
@@ -285,24 +314,28 @@ export class ProfileService {
     console.log('[ProfileService] Updating points for user:', userId, 'adding points:', pointsToAdd);
     try {
       // First fetch current points
-      const { data: currentProfile, error: fetchError } = await supabase
+      const { data: currentData, error: fetchError } = await supabase
         .from('profiles')
         .select('points')
         .eq('id', userId)
         .maybeSingle();
 
-      console.log('[ProfileService] Current profile fetch result:', { success: !fetchError, points: currentProfile?.points });
+      console.log('[ProfileService] Current profile fetch result:', { 
+        success: !fetchError, 
+        points: currentData ? currentData.points : null 
+      });
+      
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
       // If no profile found, return error
-      if (!currentProfile) {
+      if (!currentData) {
         console.log('[ProfileService] No profile found for user, returning error');
         return { data: null, error: 'User profile not found' };
       }
 
-      const newPoints = (currentProfile?.points || 0) + pointsToAdd;
+      const newPoints = (currentData.points || 0) + pointsToAdd;
 
       const { data, error } = await supabase
         .from('profiles')
@@ -316,7 +349,7 @@ export class ProfileService {
 
       console.log('[ProfileService] Points update result:', { 
         success: !error, 
-        newPoints: data?.points
+        newPoints: data ? data.points : null
       });
 
       if (error) {
@@ -342,18 +375,26 @@ export class ProfileService {
     console.log('[ProfileService] Adding badge to user:', userId, 'badge:', badge);
     try {
       // First fetch current badges
-      const { data: currentProfile, error: fetchError } = await supabase
+      const { data: currentData, error: fetchError } = await supabase
         .from('profiles')
         .select('badges')
         .eq('id', userId)
         .maybeSingle();
 
-      console.log('[ProfileService] Current profile badges fetch result:', { success: !fetchError, badges: currentProfile?.badges });
+      console.log('[ProfileService] Current profile badges fetch result:', { 
+        success: !fetchError, 
+        badges: currentData ? currentData.badges : null 
+      });
+      
       if (fetchError) {
         return { data: null, error: fetchError.message };
       }
 
-      const currentBadges = currentProfile?.badges || [];
+      if (!currentData) {
+        return { data: null, error: 'User profile not found' };
+      }
+
+      const currentBadges = currentData.badges || [];
       
       // Don't add duplicate badges
       if (currentBadges.includes(badge)) {
@@ -375,7 +416,7 @@ export class ProfileService {
 
       console.log('[ProfileService] Badge add result:', { 
         success: !error, 
-        newBadges: data?.badges
+        newBadges: data ? data.badges : null
       });
 
       if (error) {
@@ -431,19 +472,23 @@ export class ProfileService {
     console.log('[ProfileService] Getting rank for user:', userId);
     try {
       // Get user's points first
-      const { data: userProfile, error: userError } = await supabase
+      const { data: userData, error: userError } = await supabase
         .from('profiles')
         .select('points')
         .eq('id', userId)
         .maybeSingle();
 
-      console.log('[ProfileService] User points fetch result:', { success: !userError, points: userProfile?.points });
+      console.log('[ProfileService] User points fetch result:', { 
+        success: !userError, 
+        points: userData ? userData.points : null 
+      });
+      
       if (userError) {
         return { data: null, error: userError.message };
       }
 
       // If no profile found, return rank 0
-      if (!userProfile) {
+      if (!userData) {
         console.log('[ProfileService] No profile found for user, returning rank 0');
         return { data: 0, error: null };
       }
@@ -452,7 +497,7 @@ export class ProfileService {
       const { count, error: countError } = await supabase
         .from('profiles')
         .select('id', { count: 'exact', head: true })
-        .gt('points', userProfile.points);
+        .gt('points', userData.points);
 
       console.log('[ProfileService] Rank calculation result:', { success: !countError, usersWithMorePoints: count });
       if (countError) {
@@ -471,6 +516,76 @@ export class ProfileService {
       };
     }
   }
+
+  /**
+   * Update user's preferred currency
+   */
+  static async updateUserCurrency(
+    userId: string,
+    currency: string
+  ): Promise<ServiceResponse<Profile>> {
+    try {
+      // Validate currency
+      const { data: supportedCurrencies } = await SettingsService.getSupportedCurrencies();
+      
+      if (!supportedCurrencies?.includes(currency)) {
+        return { data: null, error: `Unsupported currency: ${currency}` };
+      }
+      
+      // Update profile
+      const { data, error } = await this.updateUserProfile(userId, { currency });
+      
+      if (error) {
+        return { data: null, error };
+      }
+      
+      return { data, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to update user currency'
+      };
+    }
+  }
+
+  /**
+   * Get user's preferred currency
+   */
+  static async getUserCurrency(userId: string): Promise<ServiceResponse<string>> {
+    try {
+      const { data: profile, error } = await this.fetchProfileById(userId);
+      
+      if (error) {
+        return { data: null, error };
+      }
+      
+      if (!profile) {
+        return { data: null, error: 'User profile not found' };
+      }
+      
+      // If user has a preferred currency, return it
+      if (profile.currency) {
+        return { data: profile.currency, error: null };
+      }
+      
+      // Otherwise, get default currency for user's country
+      if (profile.country) {
+        const { data: countrySetting } = await SettingsService.getCountryCurrencySettings(profile.country);
+        
+        if (countrySetting) {
+          return { data: countrySetting.default_currency, error: null };
+        }
+      }
+      
+      // Default to USD if no country or no country setting
+      return { data: 'USD', error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get user currency'
+      };
+    }
+  }
 }
 
 // Export individual functions for backward compatibility and easier testing
@@ -483,5 +598,7 @@ export const {
   updateUserPoints,
   addBadgeToUser,
   searchProfiles,
-  getUserRank
+  getUserRank,
+  updateUserCurrency,
+  getUserCurrency
 } = ProfileService;

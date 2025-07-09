@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { SettingsService } from './settingsService';
 import type { ServiceResponse } from './profileService';
 
 export interface ReferralStats {
@@ -37,7 +38,7 @@ export class ReferralService {
   static async getReferralStats(userId: string): Promise<ServiceResponse<ReferralStats>> {
     try {
       const { data, error } = await supabase
-        .rpc('get_referral_stats', { user_id: userId });
+        .rpc('get_referral_stats', { p_user_id: userId });
 
       if (error) {
         return { data: null, error: error.message };
@@ -127,6 +128,57 @@ export class ReferralService {
       return {
         data: null,
         error: error instanceof Error ? error.message : 'Failed to validate referral code'
+      };
+    }
+  }
+
+  /**
+   * Process referral bonus for a new user signup
+   */
+  static async processReferralBonus(
+    referrerId: string,
+    newUserId: string
+  ): Promise<ServiceResponse<boolean>> {
+    try {
+      // Get referral bonus points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const referralBonusPoints = pointsSettings?.referralBonusPoints || 100; // Default to 100 if not set
+
+      // Award points to the referrer
+      const { error: pointsError } = await supabase.rpc('award_referral_bonus', {
+        p_referrer_id: referrerId,
+        p_referred_id: newUserId,
+        p_bonus_points: referralBonusPoints
+      });
+
+      if (pointsError) {
+        return { data: null, error: pointsError.message };
+      }
+
+      // Record in history for both users
+      await Promise.all([
+        // Record for referrer
+        supabase.from('daily_reward_history').insert({
+          user_id: referrerId,
+          reward_type: 'referral_bonus',
+          points_earned: referralBonusPoints,
+          reward_data: { referred_user_id: newUserId }
+        }),
+        
+        // Record for new user
+        supabase.from('daily_reward_history').insert({
+          user_id: newUserId,
+          reward_type: 'referral_signup',
+          points_earned: referralBonusPoints,
+          reward_data: { referrer_id: referrerId }
+        })
+      ]);
+
+      return { data: true, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to process referral bonus'
       };
     }
   }
@@ -233,5 +285,6 @@ export const {
   getReferralHistory,
   validateReferralCode,
   getReferredUsers,
-  getReferralLeaderboard
+  getReferralLeaderboard,
+  processReferralBonus
 } = ReferralService;

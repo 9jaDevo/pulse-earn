@@ -29,6 +29,10 @@ export interface ProfileUpdateRequest {
   name?: string;
   country?: string;
   avatar_url?: string;
+  payout_method?: string;
+  paypal_email?: string;
+  bank_details?: Record<string, any>;
+  currency?: string;
 }
 
 export interface PointsUpdateRequest {
@@ -66,10 +70,13 @@ export interface AuthResponse {
 // Future API types for other modules
 export interface PollCreateRequest {
   title: string;
-  description: string;
+  description?: string;
   options: string[];
+  type?: 'global' | 'country';
+  country?: string;
   category: string;
-  duration: number; // in hours
+  start_date?: string;
+  active_until?: string;
 }
 
 export interface TriviaGameRequest {
@@ -148,6 +155,20 @@ export interface TriviaGame {
   updated_at: string;
 }
 
+export interface TriviaGameSummary {
+  id: string;
+  title: string;
+  description?: string;
+  category: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  questionCount: number;
+  averageRating: number;
+  totalPlayers: number;
+  pointsReward: number;
+  estimatedTime: string;
+  is_active?: boolean;
+}
+
 export interface TriviaGameSession {
   gameId: string;
   currentQuestionIndex: number;
@@ -217,17 +238,6 @@ export interface PollVote {
   poll_id: string;
   vote_option: number;
   created_at: string;
-}
-
-export interface PollCreateRequest {
-  title: string;
-  description?: string;
-  options: string[];
-  type?: 'global' | 'country';
-  country?: string;
-  category: string;
-  start_date?: string;
-  active_until?: string;
 }
 
 export interface PollVoteRequest {
@@ -305,6 +315,7 @@ export interface AmbassadorDetails {
   is_active: boolean;
   total_referrals: number;
   total_earnings: number;
+  total_payouts: number;
   created_at: string;
   updated_at: string;
 }
@@ -335,6 +346,10 @@ export interface AmbassadorStats {
   monthlyEarnings: number;
   conversionRate: number;
   countryRank: number;
+  tierName?: string;
+  nextTierName?: string;
+  referralsToNextTier?: number;
+  payableBalance?: number;
 }
 
 // Poll Comments Types
@@ -372,6 +387,14 @@ export interface ContentReport {
   updated_at: string;
   resolved_by?: string;
   resolution_notes?: string;
+  reporter?: {
+    name: string;
+    email: string;
+  };
+  resolver?: {
+    name: string;
+    email: string;
+  };
 }
 
 export interface ContentReportCreateRequest {
@@ -405,6 +428,9 @@ export interface RedeemedItem {
   fulfillment_details?: Record<string, any>;
   redeemed_at: string;
   updated_at: string;
+  currency?: string;
+  original_currency?: string;
+  original_points_cost?: number;
 }
 
 // Reward Store Items Types
@@ -422,4 +448,237 @@ export interface RewardStoreItem {
   stock_quantity?: number;
   created_at: string;
   updated_at: string;
+  original_currency?: string;
+  original_points_cost?: number;
+}
+
+// Commission Tier Types
+export interface CommissionTier {
+  id: string;
+  name: string;
+  min_referrals: number;
+  global_rate: number;
+  country_rates: Record<string, number>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Payout System Types
+export interface PayoutMethod {
+  id: string;
+  name: string;
+  description?: string;
+  is_automatic: boolean;
+  is_active: boolean;
+  config: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayoutRequest {
+  id: string;
+  user_id: string;
+  amount: number;
+  payout_method: string;
+  payout_details: Record<string, any>;
+  status: 'pending' | 'approved' | 'rejected' | 'processed';
+  requested_at: string;
+  processed_at?: string;
+  processed_by?: string;
+  admin_notes?: string;
+  transaction_id?: string;
+  created_at: string;
+  updated_at: string;
+  currency?: string;
+}
+
+export interface PayoutRequestCreateRequest {
+  amount: number;
+  payout_method: string;
+  payout_details?: Record<string, any>;
+  currency?: string;
+}
+
+export interface PayoutRequestUpdateRequest {
+  status: 'approved' | 'rejected' | 'processed';
+  admin_notes?: string;
+  transaction_id?: string;
+}
+
+export interface PayoutMethodCreateRequest {
+  name: string;
+  description?: string;
+  is_automatic: boolean;
+  config: Record<string, any>;
+}
+
+export interface PayoutMethodUpdateRequest {
+  name?: string;
+  description?: string;
+  is_automatic?: boolean;
+  is_active?: boolean;
+  config?: Record<string, any>;
+}
+
+// Marketing Materials Types
+export interface MarketingMaterial {
+  id: string;
+  name: string;
+  description?: string;
+  file_url: string;
+  file_path: string;
+  file_type: string;
+  material_type: string;
+  created_by: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MarketingMaterialCreateRequest {
+  name: string;
+  description?: string;
+  material_type: string;
+  file_type: string;
+}
+
+export interface MarketingMaterialUpdateRequest {
+  name?: string;
+  description?: string;
+  material_type?: string;
+  is_active?: boolean;
+}
+
+// Promoted Polls Types
+export interface Sponsor {
+  id: string;
+  user_id: string;
+  name: string;
+  contact_email: string;
+  website_url?: string;
+  description?: string;
+  is_verified: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SponsorCreateRequest {
+  name: string;
+  contact_email: string;
+  website_url?: string;
+  description?: string;
+}
+
+export interface SponsorUpdateRequest {
+  name?: string;
+  contact_email?: string;
+  website_url?: string;
+  description?: string;
+  is_verified?: boolean;
+  is_active?: boolean;
+}
+
+export interface PromotedPoll {
+  id: string;
+  poll_id: string;
+  sponsor_id: string;
+  pricing_model: 'CPV'; // Cost Per Vote
+  budget_amount: number;
+  cost_per_vote: number;
+  target_votes: number;
+  current_votes: number;
+  status: 'pending_approval' | 'active' | 'paused' | 'completed' | 'rejected';
+  payment_status: 'pending' | 'paid' | 'failed' | 'refunded';
+  start_date?: string;
+  end_date?: string;
+  created_at: string;
+  updated_at: string;
+  approved_by?: string;
+  approved_at?: string;
+  admin_notes?: string;
+  poll?: Poll;
+  sponsor?: Sponsor;
+}
+
+export interface PromotedPollCreateRequest {
+  poll_id: string;
+  sponsor_id: string;
+  budget_amount: number;
+  target_votes: number;
+  start_date?: string;
+  end_date?: string;
+  currency?: string;
+}
+
+export interface PromotedPollUpdateRequest {
+  status?: 'pending_approval' | 'active' | 'paused' | 'completed' | 'rejected';
+  payment_status?: 'pending' | 'paid' | 'failed' | 'refunded';
+  budget_amount?: number;
+  target_votes?: number;
+  start_date?: string;
+  end_date?: string;
+  admin_notes?: string;
+}
+
+export interface Transaction {
+  id: string;
+  user_id: string;
+  promoted_poll_id?: string;
+  amount: number;
+  currency: string;
+  original_amount?: number;
+  original_currency?: string;
+  payment_method: 'wallet' | 'stripe' | 'paypal' | 'paystack';
+  payment_method_id?: string;
+  gateway_transaction_id?: string;
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  metadata?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+  stripe_payment_intent_id?: string;
+  stripe_payment_method_id?: string;
+  stripe_customer_id?: string;
+}
+
+export interface TransactionCreateRequest {
+  promoted_poll_id?: string;
+  amount: number;
+  currency?: string;
+  payment_method: 'wallet' | 'stripe' | 'paypal' | 'paystack';
+  metadata?: Record<string, any>;
+}
+
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  description?: string;
+  type: 'wallet' | 'stripe' | 'paypal' | 'paystack';
+  is_active: boolean;
+  config?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+// Currency and Exchange Rate Types
+export interface CurrencyExchangeRate {
+  id: string;
+  from_currency: string;
+  to_currency: string;
+  rate: number;
+  updated_at: string;
+}
+
+export interface CountryCurrencySettings {
+  id: string;
+  country_code: string;
+  enabled_currencies: string[];
+  default_currency: string;
+  updated_at: string;
+}
+
+export interface PaymentGatewaySettings {
+  default_gateways: string[];
+  country_gateways: Record<string, string[]>;
 }

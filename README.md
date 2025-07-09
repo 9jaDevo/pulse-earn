@@ -1,6 +1,6 @@
 # PulseEarn Platform
 
-A scalable, community-powered platform for polls, trivia, daily rewards, and monetization through ads and ambassador commissions.
+A scalable, community-powered platform for polls, trivia, daily rewards, and monetization through ads, sponsored content, and ambassador commissions.
 
 ## 🚀 Live Features
 
@@ -48,12 +48,23 @@ A scalable, community-powered platform for polls, trivia, daily rewards, and mon
 - **Country Metrics** and earnings tracking
 - **Tier System** (Bronze 10%, Silver 15%, Gold 20%, Platinum 25%)
 - **Real-time Statistics** and reporting
+- **Marketing Materials** for ambassadors to promote the platform
 
 ### ✅ **Monetization Features**
 - **Google AdSense Integration** with multiple ad placements
 - **Ad Refresh System** for SPA optimization
 - **Revenue Tracking** for ambassadors
 - **Commission Calculations** and payouts
+- **Sponsored Content** with poll promotion system
+- **Multiple Payment Methods** including Stripe, Paystack, and wallet balance
+
+### ✅ **Sponsor & Promoted Polls System**
+- **Sponsor Profiles** for organizations and brands
+- **Poll Promotion** with budget-based pricing
+- **Cost-per-Vote** pricing model
+- **Admin Approval Workflow** for promoted content
+- **Payment Processing** with multiple gateways
+- **Performance Tracking** for promoted polls
 
 ### ✅ **User Experience**
 - **Responsive Design** for all devices
@@ -74,6 +85,9 @@ A scalable, community-powered platform for polls, trivia, daily rewards, and mon
 - **Analytics Dashboard** with key metrics
 - **System Settings** configuration
 - **Poll & Trivia Management**
+- **Marketing Materials Management**
+- **Promoted Polls Management** with approval workflow
+- **Payment Processing** and transaction monitoring
 
 ## 🏗️ Architecture Overview
 
@@ -94,11 +108,13 @@ src/
 ├── components/          # React components
 │   ├── ads/            # Advertisement components
 │   ├── admin/          # Admin dashboard components
+│   ├── ambassador/     # Ambassador program components
 │   ├── auth/           # Authentication components
 │   ├── layout/         # Layout components (Header, Footer)
 │   ├── polls/          # Poll-related components
 │   ├── profile/        # Profile-related components
 │   ├── rewards/        # Reward system components
+│   ├── sponsor/        # Sponsor and promoted polls components
 │   └── ui/             # Reusable UI components
 ├── contexts/           # React contexts (Auth, etc.)
 ├── hooks/              # Custom React hooks
@@ -116,7 +132,11 @@ src/
 │   ├── badgeService.ts      # Achievement system
 │   ├── ambassadorService.ts # Ambassador program
 │   ├── referralService.ts   # Referral system
-│   └── moderationService.ts # Content moderation
+│   ├── moderationService.ts # Content moderation
+│   ├── marketingService.ts  # Marketing materials
+│   ├── sponsorService.ts    # Sponsor management
+│   ├── promotedPollService.ts # Promoted polls
+│   └── paymentService.ts    # Payment processing
 ├── types/              # TypeScript type definitions
 └── utils/              # Utility functions
 ```
@@ -138,12 +158,20 @@ src/
 - **`country_metrics`** - Performance analytics by country
 - **`moderator_actions`** - Moderation activity logging
 
+### Monetization Tables
+- **`marketing_materials`** - Marketing assets for ambassadors
+- **`sponsors`** - Sponsor profiles for promoted content
+- **`promoted_polls`** - Sponsored poll promotions
+- **`payment_methods`** - Available payment methods
+- **`transactions`** - Payment transaction records
+
 ### Key Features
 - **Row Level Security (RLS)** on all tables
 - **Automated Triggers** for profile creation and reward tracking
 - **Referral System** with unique codes and bonus tracking
 - **Point Calculations** with streak multipliers
 - **Real-time Updates** with Supabase subscriptions
+- **Payment Processing** with multiple gateways
 
 ## 🚀 Getting Started
 
@@ -151,6 +179,8 @@ src/
 - Node.js 18+ and npm
 - Supabase account and project
 - Google AdSense account (optional)
+- Stripe account (optional)
+- Paystack account (optional)
 
 ### Installation
 
@@ -179,14 +209,34 @@ src/
    VITE_ADSENSE_SIDEBAR_SLOT=1122334455
    VITE_ADSENSE_CONTENT_SLOT=5544332211
    VITE_ADSENSE_MOBILE_SLOT=9988776655
+   
+   # Stripe Configuration (Optional)
+   VITE_STRIPE_PUBLIC_KEY=your_stripe_publishable_key
    ```
 
-3. **Set up Supabase database**:
+3. **Stripe API Key Configuration**:
+   
+   PulseEarn uses Stripe for payment processing. There are two important keys to configure:
+   
+   - **Publishable Key**: Used for frontend integration with Stripe.js.
+     - Can be set in `.env` file as `VITE_STRIPE_PUBLIC_KEY`
+     - Can also be managed through the admin panel (Settings > Integrations)
+     - The system will first check the database settings, then fall back to the environment variable
+   
+   - **Secret Key**: Used for server-side operations (creating Payment Intents, etc.).
+     - **IMPORTANT**: This key must be kept secure and never exposed in the frontend
+     - Must be configured in your Supabase project's Edge Functions settings
+     - Log into your Supabase dashboard, go to Edge Functions, and add `STRIPE_SECRET_KEY` as an environment variable
+     - This key is used by the `create-payment-intent` and `stripe-webhook` functions
+
+   If you're experiencing issues with Stripe payments, ensure both keys are properly configured in their respective locations.
+
+4. **Set up Supabase database**:
    - Run the migration files in `/supabase/migrations/` in order
    - Enable Row Level Security on all tables
    - Set up authentication policies
 
-4. **Run the development server**:
+5. **Run the development server**:
    ```bash
    npm run dev
    ```
@@ -223,6 +273,7 @@ The service layer (`src/services/`) abstracts all data access logic:
 - **Real-time Analytics**: Performance tracking and earnings
 - **Country-specific Metrics**: Localized performance data
 - **Automated Payouts**: Commission calculations and tracking
+- **Marketing Materials**: Access to promotional assets
 
 ### **Gamification Elements**
 - **Progressive Badges**: Achievement system with clear criteria
@@ -235,6 +286,14 @@ The service layer (`src/services/`) abstracts all data access logic:
 - **Categories & Filters**: Organized by topics and regions
 - **Comments & Reporting**: Community interaction with moderation
 - **Analytics**: View detailed poll performance metrics
+- **Promotion System**: Sponsor polls for increased visibility
+
+### **Sponsored Content**
+- **Sponsor Profiles**: Create and manage sponsor organizations
+- **Poll Promotion**: Promote polls with budget-based pricing
+- **Cost-per-Vote Model**: Pay only for actual engagement
+- **Multiple Payment Methods**: Stripe, Paystack, and wallet balance
+- **Performance Tracking**: Monitor promotion effectiveness
 
 ## 🔒 Security & Privacy
 
@@ -243,6 +302,7 @@ The service layer (`src/services/`) abstracts all data access logic:
 - **Rate Limiting** on sensitive operations
 - **GDPR Compliance** with data export/deletion
 - **Secure Authentication** with Supabase Auth
+- **Payment Security** with PCI-compliant providers
 
 ## 📱 Responsive Design
 

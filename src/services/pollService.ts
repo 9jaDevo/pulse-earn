@@ -1,5 +1,6 @@
 import { supabase, Database } from '../lib/supabase';
 import { ProfileService } from './profileService';
+import { SettingsService } from './settingsService';
 import type { ServiceResponse } from './profileService';
 import type { Poll, PollOption, PollVote, PollCreateRequest, PollVoteRequest, PollVoteResult, PollCategory } from '../types/api';
 
@@ -90,19 +91,19 @@ export class PollService {
       userVote: userVote?.vote_option,
       timeLeft: this.calculateTimeLeft(row.start_date, row.active_until),
       category: row.category || 'General',
-      reward: 50 // Base reward for voting
+      reward: 50 // Base reward for voting - will be overridden by settings
     };
   }
 
   /**
    * Get all distinct poll categories
    */
-  static async getAllPollCategories(): Promise<ServiceResponse<string[]>> {
+  static async getAllPollCategories(): Promise<ServiceResponse<PollCategory[]>> {
     try {
       // First try to get categories from the poll_categories table
       const { data, error } = await supabase
         .from('poll_categories')
-        .select('name')
+        .select('*')
         .eq('is_active', true)
         .order('name');
 
@@ -112,10 +113,7 @@ export class PollService {
         return this.getDistinctPollCategories();
       }
 
-      // Extract category names
-      const categories = (data || []).map(item => item.name);
-      
-      return { data: categories, error: null };
+      return { data: data || [], error: null };
     } catch (err) {
       console.error('Error in getAllPollCategories:', err);
       // Fall back to distinct categories from polls
@@ -129,21 +127,55 @@ export class PollService {
   static async createPollCategory(
     name: string,
     description: string
-  ): Promise<ServiceResponse<{ name: string }>> {
+  ): Promise<ServiceResponse<PollCategory>> {
     try {
       // adjust to your schema—here we assume a separate table "poll_categories"
       const { data, error } = await supabase
         .from('poll_categories')
         .insert({ name, description })
-        .select('name')
+        .select('*')
         .single();
       if (error) return { data: null, error: error.message };
-      return { data: { name: data.name }, error: null };
+      return { data, error: null };
     } catch (err) {
       return { data: null, error: err instanceof Error ? err.message : 'Failed to create category' };
     }
   }
 
+  /**
+   * Update a poll category
+   */
+  static async updatePollCategory(
+    categoryId: string,
+    updates: {
+      name?: string;
+      description?: string | null;
+      is_active?: boolean;
+    }
+  ): Promise<ServiceResponse<PollCategory>> {
+    try {
+      const { data, error } = await supabase
+        .from('poll_categories')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', categoryId)
+        .select()
+        .single();
+      
+      if (error) {
+        return { data: null, error: error.message };
+      }
+      
+      return { data, error: null };
+    } catch (err) {
+      return { 
+        data: null, 
+        error: err instanceof Error ? err.message : 'Failed to update category' 
+      };
+    }
+  }
   
   /**
    * Fetch polls with optional filtering
@@ -224,10 +256,19 @@ export class PollService {
         userVotes = votes || [];
       }
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
       // Transform polls with user vote information
       const transformedPolls = (polls || []).map(poll => {
         const userVote = userVotes.find(vote => vote.poll_id === poll.id);
-        return this.transformPollRow(poll, userVote);
+        const pollObj = this.transformPollRow(poll, userVote);
+        
+        // Set the reward points from settings
+        pollObj.reward = pollVotePoints;
+        
+        return pollObj;
       });
 
       return { data: transformedPolls, error: null };
@@ -240,7 +281,71 @@ export class PollService {
   }
 
   /**
-   * Fetch a single poll by ID or slug
+   * Fetch a single poll by ID
+   */
+  static async fetchPollById(
+    pollId: string,
+    userId?: string
+  ): Promise<ServiceResponse<Poll>> {
+    console.log('[PollService] Fetching poll by ID:', pollId, 'for userId:', userId || 'none');
+    try {
+      const { data: poll, error } = await supabase
+        .from('polls')
+        .select('*')
+        .eq('id', pollId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      console.log('[PollService] Poll fetch result:', { 
+        success: !error,
+        found: !!poll
+      });
+
+      if (error) {
+        console.error('[PollService] Database error fetching poll:', error);
+        return { data: null, error: error.message };
+      }
+
+      if (!poll) {
+        console.log('[PollService] Poll not found, returning null data');
+        return { data: null, error: null };
+      }
+
+      // Get user vote if userId provided
+      let userVote: PollVoteRow | undefined;
+      if (userId) {
+        console.log('[PollService] Fetching user vote for poll');
+        const { data: vote } = await supabase
+          .from('poll_votes')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('poll_id', poll.id)
+          .maybeSingle();
+        
+        console.log('[PollService] User vote fetch result:', { hasVote: !!vote });
+        userVote = vote || undefined;
+      }
+
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
+      const transformedPoll = this.transformPollRow(poll, userVote);
+      
+      // Set the reward points from settings
+      transformedPoll.reward = pollVotePoints;
+
+      return { data: transformedPoll, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to fetch poll'
+      };
+    }
+  }
+
+  /**
+   * Fetch a single poll by slug
    */
   static async fetchPollBySlug(
     slug: string,
@@ -285,7 +390,14 @@ export class PollService {
         userVote = vote || undefined;
       }
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
       const transformedPoll = this.transformPollRow(poll, userVote);
+      
+      // Set the reward points from settings
+      transformedPoll.reward = pollVotePoints;
 
       return { data: transformedPoll, error: null };
     } catch (error) {
@@ -309,14 +421,14 @@ export class PollService {
       let slug = baseSlug;
       let counter = 1;
 
-      // Ensure slug is unique
+      // Ensure slug is unique - use maybeSingle() instead of single()
       while (true) {
         const { data: existing } = await supabase
           .from('polls')
           .select('id')
           .eq('slug', slug)
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (!existing) break;
         slug = `${baseSlug}-${counter}`;
@@ -352,7 +464,14 @@ export class PollService {
         return { data: null, error: error.message };
       }
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
       const transformedPoll = this.transformPollRow(poll);
+      
+      // Set the reward points from settings
+      transformedPoll.reward = pollVotePoints;
 
       return { data: transformedPoll, error: null };
     } catch (error) {
@@ -443,6 +562,7 @@ export class PollService {
         .from('polls')
         .update({ 
           options: updatedOptions as any,
+          total_votes: poll.total_votes + 1,
           updated_at: new Date().toISOString()
         })
         .eq('id', voteData.poll_id);
@@ -452,10 +572,21 @@ export class PollService {
         return { data: null, error: updateError.message };
       }
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
+      console.log('[PollService] Points from settings:', { pollVotePoints });
+
       // Award points to user
-      const pointsEarned = 50; // Base voting reward
-      await ProfileService.updateUserPoints(userId, pointsEarned);
-      console.log('[PollService] Points awarded to user:', pointsEarned);
+      const { error: pointsError } = await ProfileService.updateUserPoints(userId, pollVotePoints);
+      
+      if (pointsError) {
+        console.error('[PollService] Error awarding points:', pointsError);
+        // Continue even if points update fails
+      } else {
+        console.log('[PollService] Points awarded to user:', pollVotePoints);
+      }
 
       // Fetch updated poll
       const { data: updatedPoll } = await this.fetchPollBySlug(poll.slug, userId);
@@ -463,8 +594,8 @@ export class PollService {
 
       const result: PollVoteResult = {
         success: true,
-        message: `Vote recorded successfully! You earned ${pointsEarned} points.`,
-        pointsEarned,
+        message: `Vote recorded successfully! You earned ${pollVotePoints} points.`,
+        pointsEarned: pollVotePoints,
         poll: updatedPoll || undefined
       };
 
@@ -552,7 +683,14 @@ export class PollService {
         return { data: null, error: updateError.message };
       }
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
       const transformedPoll = this.transformPollRow(updatedPoll);
+      
+      // Set the reward points from settings
+      transformedPoll.reward = pollVotePoints;
 
       return { data: transformedPoll, error: null };
     } catch (error) {
@@ -908,6 +1046,10 @@ export class PollService {
       let createdPolls: Poll[] = [];
       let votedPolls: Poll[] = [];
 
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+
       if (includeCreated) {
         const { data: created } = await supabase
           .from('polls')
@@ -918,7 +1060,11 @@ export class PollService {
           .limit(limit);
 
         if (created) {
-          createdPolls = created.map(poll => this.transformPollRow(poll));
+          createdPolls = created.map(poll => {
+            const pollObj = this.transformPollRow(poll);
+            pollObj.reward = pollVotePoints;
+            return pollObj;
+          });
         }
       }
 
@@ -932,7 +1078,11 @@ export class PollService {
           return { data: null, error: votesError.message };
         }
 
-        votedPolls = (votes || []).map(v => this.transformPollRow(v.poll));
+        votedPolls = (votes || []).map(v => {
+          const pollObj = this.transformPollRow(v.polls);
+          pollObj.reward = pollVotePoints;
+          return pollObj;
+        });
       }
 
       return {
@@ -1034,7 +1184,7 @@ export class PollService {
    * Get distinct poll categories from polls table
    * This is a fallback method if poll_categories table doesn't exist
    */
-  static async getDistinctPollCategories(): Promise<ServiceResponse<string[]>> {
+  static async getDistinctPollCategories(): Promise<ServiceResponse<PollCategory[]>> {
     try {
       const { data, error } = await supabase
         .from('polls')
@@ -1045,16 +1195,26 @@ export class PollService {
         return { data: null, error: error.message };
       }
       
-      // Extract unique categories
-      const categories = [...new Set((data || [])
+      // Extract unique categories and transform to PollCategory objects
+      const categoryNames = [...new Set((data || [])
         .map(poll => poll.category)
         .filter(Boolean)
       )].sort();
       
       // Add 'General' if it's not already included
-      if (!categories.includes('General')) {
-        categories.unshift('General');
+      if (!categoryNames.includes('General')) {
+        categoryNames.unshift('General');
       }
+      
+      // Transform to PollCategory objects
+      const categories: PollCategory[] = categoryNames.map(name => ({
+        id: name.toLowerCase().replace(/\s+/g, '-'), // Generate a simple ID
+        name,
+        description: null,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
       
       return { data: categories, error: null };
     } catch (error) {
@@ -1130,10 +1290,19 @@ export class PollService {
         userVotes = votes || [];
       }
       
+      // Get poll vote points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const pollVotePoints = pointsSettings?.pollVotePoints || 50; // Default to 50 if not set
+      
       // Transform polls with user vote information
       const transformedPolls = (polls || []).map(poll => {
         const userVote = userVotes.find(vote => vote.poll_id === poll.id);
-        return this.transformPollRow(poll, userVote);
+        const pollObj = this.transformPollRow(poll, userVote);
+        
+        // Set the reward points from settings
+        pollObj.reward = pollVotePoints;
+        
+        return pollObj;
       });
       
       return { 
@@ -1148,3 +1317,27 @@ export class PollService {
     }
   }
 }
+
+// Export individual functions for backward compatibility and easier testing
+export const {
+  getAllPollCategories,
+  createPollCategory,
+  updatePollCategory,
+  fetchPolls,
+  fetchPollById,
+  fetchPollBySlug,
+  createPoll,
+  voteOnPoll,
+  updatePoll,
+  archivePoll,
+  restorePoll,
+  getPollComments,
+  createPollComment,
+  updatePollComment,
+  deletePollComment,
+  reportContent,
+  getUserPollHistory,
+  getPollStats,
+  getDistinctPollCategories,
+  searchPolls
+} = PollService;

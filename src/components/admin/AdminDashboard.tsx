@@ -8,8 +8,11 @@ import { ModerationTools } from './ModerationTools';
 import { SystemSettings } from './SystemSettings';
 import { RewardStoreManagement } from './RewardStoreManagement';
 import { OverviewDashboard } from './OverviewDashboard';
+import { PayoutManagement } from './PayoutManagement';
+import { MarketingMaterialsManagement } from './MarketingMaterialsManagement';
+import { PromotedPollsManagement } from './PromotedPollsManagement';
 
-type AdminSection = 'overview' | 'users' | 'content' | 'analytics' | 'moderation' | 'settings' | 'rewards';
+type AdminSection = 'overview' | 'users' | 'content' | 'analytics' | 'moderation' | 'settings' | 'rewards' | 'payouts' | 'marketing' | 'promoted';
 
 export const AdminDashboard: React.FC = () => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
@@ -19,7 +22,7 @@ export const AdminDashboard: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const section = params.get('section') as AdminSection | null;
-    if (section && ['overview', 'users', 'content', 'analytics', 'moderation', 'settings', 'rewards'].includes(section)) {
+    if (section && ['overview', 'users', 'content', 'analytics', 'moderation', 'settings', 'rewards', 'payouts', 'marketing', 'promoted'].includes(section)) {
       setActiveSection(section);
     }
   }, [location]);
@@ -50,6 +53,12 @@ export const AdminDashboard: React.FC = () => {
         return <SystemSettings />;
       case 'rewards':
         return <RewardStoreManagement />;
+      case 'payouts':
+        return <PayoutManagement />;
+      case 'marketing':
+        return <MarketingMaterialsManagement />;
+      case 'promoted':
+        return <PromotedPollsManagement />;
       default:
         return <OverviewDashboard />;
     }

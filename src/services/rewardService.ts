@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { ProfileService } from './profileService';
+import { SettingsService } from './settingsService';
 import type { ServiceResponse } from './profileService';
 import type {
   TriviaQuestion,
@@ -12,7 +13,8 @@ import type {
   RedeemItemRequest,
   RedeemItemResult,
   RedeemedItem,
-  RewardStoreItem
+  RewardStoreItem,
+  TriviaGame
 } from '../types/api';
 
 export interface TriviaGameSummary {
@@ -26,6 +28,7 @@ export interface TriviaGameSummary {
   totalPlayers: number;
   pointsReward: number;
   estimatedTime: string;
+  is_active?: boolean;
 }
 
 /**
@@ -36,6 +39,7 @@ export interface TriviaGameSummary {
  * - Daily Trivia Challenge system
  * - Watch & Win ad reward system
  * - Reward history tracking
+ * - Multi-currency support for reward store
  * 
  * When migrating to Node.js backend, only this file needs to be updated
  * to make HTTP requests instead of direct Supabase calls.
@@ -182,15 +186,18 @@ export class RewardService {
       category?: string;
       difficulty?: string;
       country?: string;
+      limit?: number;
+      offset?: number;
     } = {}
   ): Promise<ServiceResponse<TriviaGameSummary[]>> {
     try {
-      const { category, difficulty, country } = options;
+      const { category, difficulty, country, limit = 10, offset = 0 } = options;
 
       // First try to fetch from trivia_games table
       let query = supabase.from('trivia_games')
         .select('*')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .range(offset, offset + limit - 1);
 
       if (category && category !== 'all') {
         query = query.eq('category', category);
@@ -217,7 +224,8 @@ export class RewardService {
         averageRating: 4.5 + Math.random() * 0.5, // Simulated rating between 4.5-5.0
         totalPlayers: Math.floor(Math.random() * 2000) + 500, // Simulated player count
         pointsReward: game.points_reward,
-        estimatedTime: `${game.estimated_time_minutes} min`
+        estimatedTime: `${game.estimated_time_minutes} min`,
+        is_active: game.is_active
       }));
 
       // Sort by category, then by difficulty
@@ -369,31 +377,44 @@ export class RewardService {
   }
 
   /**
-   * Get trivia questions for a specific category and difficulty
+   * Get trivia questions with filtering options
    */
-  static async getTriviaQuestionsByGame(
-    category: string,
-    difficulty: string,
+  static async getTriviaQuestions(
     options: {
       limit?: number;
+      offset?: number;
+      category?: string;
+      difficulty?: string;
       country?: string;
+      isActive?: boolean;
     } = {}
   ): Promise<ServiceResponse<TriviaQuestion[]>> {
     try {
-      const { limit = 10, country } = options;
+      const { limit = 10, offset = 0, category, difficulty, country, isActive = true } = options;
 
       let query = supabase
         .from('trivia_questions')
         .select('*')
-        .eq('is_active', true)
-        .eq('category', category)
-        .eq('difficulty', difficulty)
-        .limit(limit);
+        .range(offset, offset + limit - 1);
+      
+      if (isActive !== undefined) {
+        query = query.eq('is_active', isActive);
+      }
 
-      if (country) {
-        query = query.or(`country.eq.${country},country.is.null`);
-      } else {
-        query = query.is('country', null);
+      if (category) {
+        query = query.eq('category', category);
+      }
+
+      if (difficulty) {
+        query = query.eq('difficulty', difficulty);
+      }
+
+      if (country !== undefined) {
+        if (country) {
+          query = query.eq('country', country);
+        } else {
+          query = query.is('country', null);
+        }
       }
 
       const { data, error } = await query;
@@ -429,6 +450,11 @@ export class RewardService {
         return { data: null, error: 'Cannot spin today. Already spun or error checking status.' };
       }
 
+      // Get streak settings from app_settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const maxStreakMultiplier = pointsSettings?.maxStreakMultiplier || 2.0; // Default to 2.0 if not set
+      const streakIncrement = pointsSettings?.streakIncrement || 0.1; // Default to 0.1 if not set
+
       // Weighted spin logic
       const random = Math.random() * 100;
       let result: SpinResult;
@@ -449,12 +475,27 @@ export class RewardService {
 
       const today = new Date().toISOString().split('T')[0];
 
+      // Calculate streak multiplier
+      const newStreak = result.success ? (status.spinStreak + 1) : 0;
+      const streakMultiplier = Math.min(1 + (newStreak * streakIncrement), maxStreakMultiplier);
+      
+      // Apply streak multiplier to points
+      const basePoints = result.points;
+      const bonusPoints = result.success ? Math.floor(basePoints * (streakMultiplier - 1)) : 0;
+      const totalPoints = basePoints + bonusPoints;
+      
+      // Update result with new points total
+      if (result.success && bonusPoints > 0) {
+        result.points = totalPoints;
+        result.message = `You won ${basePoints} points + ${bonusPoints} streak bonus!`;
+      }
+
       // Update user daily rewards
       const { error: updateError } = await supabase
         .from('user_daily_rewards')
         .update({
           last_spin_date: today,
-          spin_streak: result.success ? status.spinStreak + 1 : 0,
+          spin_streak: newStreak,
           total_spins: status.totalSpins + 1,
           updated_at: new Date().toISOString()
         })
@@ -479,7 +520,14 @@ export class RewardService {
           user_id: userId,
           reward_type: 'spin',
           points_earned: result.points,
-          reward_data: { result: result.type, message: result.message }
+          reward_data: { 
+            result: result.type, 
+            message: result.message,
+            streak: newStreak,
+            streakMultiplier: streakMultiplier,
+            basePoints: basePoints,
+            bonusPoints: bonusPoints
+          }
         });
 
       return { data: result, error: null };
@@ -570,26 +618,32 @@ export class RewardService {
         return { data: null, error: statusError };
       }
 
+      // Get points settings from app_settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      
       // Calculate points based on difficulty and correctness
       let basePoints = 0;
       if (isCorrect) {
         switch (question.difficulty) {
           case 'easy':
-            basePoints = 10;
+            basePoints = pointsSettings?.triviaEasyPoints || 10; // Default to 10 if not set
             break;
           case 'medium':
-            basePoints = 20;
+            basePoints = pointsSettings?.triviaMediumPoints || 20; // Default to 20 if not set
             break;
           case 'hard':
-            basePoints = 30;
+            basePoints = pointsSettings?.triviaHardPoints || 30; // Default to 30 if not set
             break;
         }
       }
 
-      // Calculate streak bonus (10% per day, max 100%)
+      // Calculate streak bonus using settings
+      const maxStreakMultiplier = pointsSettings?.maxStreakMultiplier || 2.0; // Default to 2.0 if not set
+      const streakIncrement = pointsSettings?.streakIncrement || 0.1; // Default to 0.1 if not set
+      
       const newStreak = isCorrect ? (status?.triviaStreak || 0) + 1 : 0;
-      const streakMultiplier = Math.min(newStreak * 0.1, 1.0);
-      const streakBonus = Math.floor(basePoints * streakMultiplier);
+      const streakMultiplier = Math.min(1 + (newStreak * streakIncrement), maxStreakMultiplier);
+      const streakBonus = Math.floor(basePoints * (streakMultiplier - 1));
       const totalPoints = basePoints + streakBonus;
 
       const today = new Date().toISOString().split('T')[0];
@@ -630,7 +684,9 @@ export class RewardService {
             correct_answer: question.correct_answer,
             is_correct: isCorrect,
             difficulty: question.difficulty,
-            streak_bonus: streakBonus
+            streak_bonus: streakBonus,
+            streak_multiplier: streakMultiplier,
+            base_points: basePoints
           }
         });
 
@@ -662,8 +718,10 @@ export class RewardService {
         return { data: null, error: 'Cannot watch ad today. Already watched or error checking status.' };
       }
 
-      // Fixed reward for watching ads
-      const pointsEarned = 15;
+      // Get ad watch points from settings
+      const { data: pointsSettings } = await SettingsService.getSettings('points');
+      const adWatchPoints = pointsSettings?.adWatchPoints || 15; // Default to 15 if not set
+
       const today = new Date().toISOString().split('T')[0];
 
       // Update user daily rewards
@@ -681,7 +739,7 @@ export class RewardService {
       }
 
       // Add points to user profile
-      const { error: pointsError } = await ProfileService.updateUserPoints(userId, pointsEarned);
+      const { error: pointsError } = await ProfileService.updateUserPoints(userId, adWatchPoints);
       if (pointsError) {
         return { data: null, error: pointsError };
       }
@@ -692,14 +750,14 @@ export class RewardService {
         .insert({
           user_id: userId,
           reward_type: 'watch',
-          points_earned: pointsEarned,
+          points_earned: adWatchPoints,
           reward_data: { ad_type: 'rewarded_video' }
         });
 
       const result: AdWatchResult = {
         success: true,
-        pointsEarned,
-        message: `You earned ${pointsEarned} points for watching the ad!`
+        pointsEarned: adWatchPoints,
+        message: `You earned ${adWatchPoints} points for watching the ad!`
       };
 
       return { data: result, error: null };
@@ -761,62 +819,6 @@ export class RewardService {
   }
 
   /**
-   * Get trivia questions for admin management
-   */
-  static async getTriviaQuestions(
-    options: {
-      limit?: number;
-      category?: string;
-      difficulty?: 'easy' | 'medium' | 'hard';
-      country?: string;
-      isActive?: boolean;
-    } = {}
-  ): Promise<ServiceResponse<TriviaQuestion[]>> {
-    try {
-      const { limit = 100, category, difficulty, country, isActive } = options;
-
-      let query = supabase
-        .from('trivia_questions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      if (category) {
-        query = query.eq('category', category);
-      }
-
-      if (difficulty) {
-        query = query.eq('difficulty', difficulty);
-      }
-
-      if (country !== undefined) {
-        if (country === null) {
-          query = query.is('country', null);
-        } else {
-          query = query.eq('country', country);
-        }
-      }
-
-      if (isActive !== undefined) {
-        query = query.eq('is_active', isActive);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        return { data: null, error: error.message };
-      }
-
-      return { data: data || [], error: null };
-    } catch (error) {
-      return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Failed to get trivia questions'
-      };
-    }
-  }
-
-  /**
    * Reset daily rewards for testing (admin only)
    */
   static async resetDailyRewards(userId: string): Promise<ServiceResponse<boolean>> {
@@ -845,160 +847,6 @@ export class RewardService {
   }
 
   /**
-   * Redeem a store item for points
-   */
-  static async redeemStoreItem(
-    userId: string,
-    request: RedeemItemRequest
-  ): Promise<ServiceResponse<RedeemItemResult>> {
-    try {
-      // 1. Check if user has enough points
-      const { data: profile, error: profileError } = await ProfileService.fetchProfileById(userId);
-      
-      if (profileError || !profile) {
-        return { data: null, error: profileError || 'User profile not found' };
-      }
-      
-      if (profile.points < request.pointsCost) {
-        return { 
-          data: null, 
-          error: `Insufficient points. You have ${profile.points} points, but this item costs ${request.pointsCost} points.` 
-        };
-      }
-
-      // 2. Check if the item exists and is available
-      const { data: storeItem, error: storeItemError } = await supabase
-        .from('reward_store_items')
-        .select('*')
-        .eq('id', request.itemId)
-        .eq('is_active', true)
-        .single();
-
-      if (storeItemError) {
-        return { data: null, error: 'Item not found or no longer available' };
-      }
-
-      // 3. Check if there's enough stock
-      if (storeItem.stock_quantity !== null && storeItem.stock_quantity <= 0) {
-        return { data: null, error: 'This item is out of stock' };
-      }
-
-      // 4. Deduct points from user's profile
-      // Note: ProfileService.updateUserPoints adds points, so we pass a negative value to deduct
-      const { data: updatedProfile, error: pointsError } = await ProfileService.updateUserPoints(
-        userId,
-        -request.pointsCost // Deduct points
-      );
-
-      if (pointsError) {
-        return { data: null, error: pointsError };
-      }
-
-      if (!updatedProfile) {
-        return { data: null, error: 'Failed to update user points.' };
-      }
-
-      // 5. Record the redemption in the redeemed_items table
-      const { data: redeemedItemRecord, error: recordError } = await supabase
-        .from('redeemed_items')
-        .insert({
-          user_id: userId,
-          item_id: request.itemId,
-          item_name: request.itemName,
-          points_cost: request.pointsCost,
-          fulfillment_details: request.fulfillmentDetails || {},
-          status: 'pending_fulfillment' // Initial status
-        })
-        .select()
-        .single();
-
-      if (recordError) {
-        // If recording fails, attempt to refund the points
-        await ProfileService.updateUserPoints(userId, request.pointsCost);
-        return { data: null, error: recordError.message };
-      }
-
-      // 6. Update item stock if applicable
-      if (storeItem.stock_quantity !== null) {
-        await supabase
-          .from('reward_store_items')
-          .update({ 
-            stock_quantity: storeItem.stock_quantity - 1,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', request.itemId);
-      }
-
-      // 7. Record in reward history for tracking
-      await supabase
-        .from('daily_reward_history')
-        .insert({
-          user_id: userId,
-          reward_type: 'spin', // Using existing type as a workaround
-          points_earned: -request.pointsCost, // Negative to indicate points spent
-          reward_data: { 
-            redemption_type: 'store_item',
-            item_id: request.itemId,
-            item_name: request.itemName
-          }
-        });
-
-      const result: RedeemItemResult = {
-        success: true,
-        message: `Successfully redeemed ${request.itemName} for ${request.pointsCost} points!`,
-        newPointsBalance: updatedProfile.points,
-        redeemedItemId: redeemedItemRecord.id
-      };
-
-      return { data: result, error: null };
-    } catch (error) {
-      return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Failed to redeem item'
-      };
-    }
-  }
-
-  /**
-   * Get user's redeemed items
-   */
-  static async getRedeemedItems(
-    userId: string,
-    options: {
-      limit?: number;
-      status?: 'pending_fulfillment' | 'fulfilled' | 'cancelled';
-    } = {}
-  ): Promise<ServiceResponse<RedeemedItem[]>> {
-    try {
-      const { limit = 50, status } = options;
-
-      let query = supabase
-        .from('redeemed_items')
-        .select('*')
-        .eq('user_id', userId)
-        .order('redeemed_at', { ascending: false })
-        .limit(limit);
-
-      if (status) {
-        query = query.eq('status', status);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        return { data: null, error: error.message };
-      }
-
-      return { data: data || [], error: null };
-    } catch (error) {
-      return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Failed to get redeemed items'
-      };
-    }
-  }
-
-  /**
    * Get reward store items
    */
   static async getRewardStoreItems(
@@ -1008,10 +856,11 @@ export class RewardService {
       minPoints?: number;
       maxPoints?: number;
       inStock?: boolean;
+      currency?: string;
     } = {}
   ): Promise<ServiceResponse<RewardStoreItem[]>> {
     try {
-      const { limit = 50, itemType, minPoints, maxPoints, inStock } = options;
+      const { limit = 50, itemType, minPoints, maxPoints, inStock, currency } = options;
 
       let query = supabase
         .from('reward_store_items')
@@ -1036,10 +885,39 @@ export class RewardService {
         query = query.or('stock_quantity.gt.0,stock_quantity.is.null');
       }
 
+      if (currency) {
+        query = query.eq('currency', currency);
+      }
+
       const { data, error } = await query;
 
       if (error) {
         return { data: null, error: error.message };
+      }
+
+      // If currency is provided and items have different currencies, convert points cost
+      if (currency && data) {
+        const convertedItems = await Promise.all(data.map(async (item) => {
+          if (item.currency === currency) {
+            return item;
+          }
+          
+          // Convert points cost to the requested currency
+          const { data: convertedCost } = await SettingsService.getExchangeRate(item.currency, currency);
+          
+          if (convertedCost) {
+            return {
+              ...item,
+              points_cost: Math.round(item.points_cost * convertedCost),
+              original_currency: item.currency,
+              original_points_cost: item.points_cost
+            };
+          }
+          
+          return item;
+        }));
+        
+        return { data: convertedItems, error: null };
       }
 
       return { data: data || [], error: null };
@@ -1066,9 +944,15 @@ export class RewardService {
         return { data: null, error: 'Unauthorized: Only admins can create reward items' };
       }
 
+      // Ensure currency is set
+      const itemWithCurrency = {
+        ...itemData,
+        currency: itemData.currency || 'USD'
+      };
+
       const { data, error } = await supabase
         .from('reward_store_items')
-        .insert(itemData)
+        .insert(itemWithCurrency)
         .select()
         .single();
 
@@ -1169,6 +1053,210 @@ export class RewardService {
       };
     }
   }
+
+  /**
+   * Get user's redeemed items
+   */
+  static async getRedeemedItems(
+    userId: string,
+    options: {
+      limit?: number;
+      status?: 'pending_fulfillment' | 'fulfilled' | 'cancelled';
+      currency?: string;
+    } = {}
+  ): Promise<ServiceResponse<RedeemedItem[]>> {
+    try {
+      const { limit = 50, status, currency } = options;
+
+      let query = supabase
+        .from('redeemed_items')
+        .select('*')
+        .eq('user_id', userId)
+        .order('redeemed_at', { ascending: false })
+        .limit(limit);
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      // If currency is provided, convert points cost to the requested currency
+      if (currency && data) {
+        const convertedItems = await Promise.all(data.map(async (item) => {
+          // Get the original currency from the item or from the store item
+          const { data: storeItem } = await supabase
+            .from('reward_store_items')
+            .select('currency')
+            .eq('id', item.item_id)
+            .single();
+          
+          const itemCurrency = storeItem?.currency || 'USD';
+          
+          if (itemCurrency === currency) {
+            return item;
+          }
+          
+          // Convert points cost to the requested currency
+          const { data: convertedCost } = await SettingsService.getExchangeRate(itemCurrency, currency);
+          
+          if (convertedCost) {
+            return {
+              ...item,
+              points_cost: Math.round(item.points_cost * convertedCost),
+              original_currency: itemCurrency,
+              original_points_cost: item.points_cost
+            };
+          }
+          
+          return item;
+        }));
+        
+        return { data: convertedItems, error: null };
+      }
+
+      return { data: data || [], error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get redeemed items'
+      };
+    }
+  }
+
+  /**
+   * Redeem a store item for points
+   */
+  static async redeemStoreItem(
+    userId: string,
+    request: RedeemItemRequest
+  ): Promise<ServiceResponse<RedeemItemResult>> {
+    try {
+      // 1. Check if user has enough points
+      const { data: profile, error: profileError } = await ProfileService.fetchProfileById(userId);
+      
+      if (profileError || !profile) {
+        return { data: null, error: profileError || 'User profile not found' };
+      }
+      
+      // Get user's preferred currency
+      const userCurrency = profile.currency || 'USD';
+      
+      // 2. Check if the item exists and is available
+      const { data: storeItem, error: storeItemError } = await supabase
+        .from('reward_store_items')
+        .select('*')
+        .eq('id', request.itemId)
+        .eq('is_active', true)
+        .single();
+
+      if (storeItemError) {
+        return { data: null, error: 'Item not found or no longer available' };
+      }
+      
+      // Convert item cost to user's currency if different
+      let pointsCost = request.pointsCost;
+      if (storeItem.currency !== userCurrency) {
+        const { data: exchangeRate } = await SettingsService.getExchangeRate(storeItem.currency, userCurrency);
+        
+        if (exchangeRate) {
+          pointsCost = Math.round(request.pointsCost * exchangeRate);
+        }
+      }
+      
+      if (profile.points < pointsCost) {
+        return { 
+          data: null, 
+          error: `Insufficient points. You have ${profile.points} points, but this item costs ${pointsCost} points.` 
+        };
+      }
+
+      // 3. Check if there's enough stock
+      if (storeItem.stock_quantity !== null && storeItem.stock_quantity <= 0) {
+        return { data: null, error: 'This item is out of stock' };
+      }
+
+      // 4. Deduct points from user's profile
+      // Note: ProfileService.updateUserPoints adds points, so we pass a negative value to deduct
+      const { data: updatedProfile, error: pointsError } = await ProfileService.updateUserPoints(
+        userId,
+        -pointsCost // Deduct points
+      );
+
+      if (pointsError) {
+        return { data: null, error: pointsError };
+      }
+
+      if (!updatedProfile) {
+        return { data: null, error: 'Failed to update user points.' };
+      }
+
+      // 5. Record the redemption in the redeemed_items table
+      const { data: redeemedItemRecord, error: recordError } = await supabase
+        .from('redeemed_items')
+        .insert({
+          user_id: userId,
+          item_id: request.itemId,
+          item_name: request.itemName,
+          points_cost: pointsCost,
+          fulfillment_details: request.fulfillmentDetails || {},
+          status: 'pending_fulfillment' // Initial status
+        })
+        .select()
+        .single();
+
+      if (recordError) {
+        // If recording fails, attempt to refund the points
+        await ProfileService.updateUserPoints(userId, pointsCost);
+        return { data: null, error: recordError.message };
+      }
+
+      // 6. Update item stock if applicable
+      if (storeItem.stock_quantity !== null) {
+        await supabase
+          .from('reward_store_items')
+          .update({ 
+            stock_quantity: storeItem.stock_quantity - 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', request.itemId);
+      }
+
+      // 7. Record in reward history for tracking
+      await supabase
+        .from('daily_reward_history')
+        .insert({
+          user_id: userId,
+          reward_type: 'spin', // Using existing type as a workaround
+          points_earned: -pointsCost, // Negative to indicate points spent
+          reward_data: { 
+            redemption_type: 'store_item',
+            item_id: request.itemId,
+            item_name: request.itemName,
+            currency: storeItem.currency,
+            user_currency: userCurrency
+          }
+        });
+
+      const result: RedeemItemResult = {
+        success: true,
+        message: `Successfully redeemed ${request.itemName} for ${pointsCost} points!`,
+        newPointsBalance: updatedProfile.points,
+        redeemedItemId: redeemedItemRecord.id
+      };
+
+      return { data: result, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to redeem item'
+      };
+    }
+  }
 }
 
 // Export individual functions for backward compatibility and easier testing
@@ -1177,18 +1265,20 @@ export const {
   getDistinctTriviaCategories,
   getDistinctTriviaDifficulties,
   getTriviaGameSummaries,
-  getTriviaQuestionsByGame,
+  getTriviaQuestions,
   performSpin,
   getDailyTriviaQuestion,
   submitTriviaAnswer,
   recordAdWatch,
   getRewardHistory,
-  getTriviaQuestions,
   resetDailyRewards,
   redeemStoreItem,
   getRedeemedItems,
   getRewardStoreItems,
   createRewardStoreItem,
   updateRewardStoreItem,
-  updateRedemptionStatus
+  updateRedemptionStatus,
+  fetchTriviaGameById,
+  fetchTriviaQuestionsForGame,
+  submitTriviaGame
 } = RewardService;

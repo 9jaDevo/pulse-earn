@@ -3,13 +3,43 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-console.log('[Supabase] Initializing Supabase client with:', {
-  hasUrl: !!supabaseUrl,
-  hasAnonKey: !!supabaseAnonKey
-});
+// Check for placeholder or missing values
+const isPlaceholderUrl = !supabaseUrl || 
+  supabaseUrl === 'your_supabase_project_url_here' || 
+  supabaseUrl.includes('placeholder');
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+const isPlaceholderKey = !supabaseAnonKey || 
+  supabaseAnonKey === 'your_supabase_anon_key_here' || 
+  supabaseAnonKey.includes('placeholder');
+
+if (isPlaceholderUrl || isPlaceholderKey) {
+  console.error('[Supabase] Configuration Error:', {
+    hasUrl: !!supabaseUrl,
+    hasAnonKey: !!supabaseAnonKey,
+    isPlaceholderUrl,
+    isPlaceholderKey
+  });
+  
+  throw new Error(`
+    Supabase configuration incomplete. Please update your .env file with actual values:
+    
+    1. Go to https://supabase.com/dashboard
+    2. Select your project
+    3. Go to Settings > API
+    4. Copy your Project URL and anon/public key
+    5. Update VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env
+    
+    Current status:
+    - URL configured: ${!isPlaceholderUrl}
+    - Key configured: ${!isPlaceholderKey}
+  `);
+}
+
+// Validate URL format
+try {
+  new URL(supabaseUrl);
+} catch (error) {
+  throw new Error(`Invalid Supabase URL format: ${supabaseUrl}`);
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -24,6 +54,25 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 supabase.auth.onAuthStateChange((event, session) => {
   console.log('[Supabase] Auth state change:', event, 'Session:', session ? 'exists' : 'null');
 });
+
+// Test connection on initialization
+const testConnection = async () => {
+  try {
+    console.log('[Supabase] Testing connection...');
+    const { data, error } = await supabase.from('profiles').select('count').limit(1);
+    
+    if (error) {
+      console.error('[Supabase] Connection test failed:', error);
+    } else {
+      console.log('[Supabase] Connection test successful');
+    }
+  } catch (error) {
+    console.error('[Supabase] Connection test error:', error);
+  }
+};
+
+// Test connection after a short delay to allow for initialization
+setTimeout(testConnection, 1000);
 
 export type Database = {
   public: {

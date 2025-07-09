@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useSearchParams } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { AdProvider } from './contexts/AdContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import { Header } from './components/layout/Header';
 import { HeaderAd } from './components/ads/HeaderAd';
 import { MobileAd } from './components/ads/MobileAd';
@@ -23,15 +25,18 @@ import { useScrollToTop } from './hooks/useScrollToTop';
 import { useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/Toast';
 import { CookieConsentBanner } from './components/layout/CookieConsentBanner';
+import { useToast } from './hooks/useToast';
 
-// Component to handle referral codes from URL
+// Component to handle referral codes and payment redirects from URL
 const ReferralHandler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [searchParams] = useSearchParams();
+  const { successToast, errorToast } = useToast();
   
   // Auto-scroll to top on route changes
   useScrollToTop();
   
   React.useEffect(() => {
+    // Handle referral code
     const refCode = searchParams.get('ref');
     if (refCode) {
       // Store referral code in sessionStorage for use during signup
@@ -42,7 +47,40 @@ const ReferralHandler: React.FC<{ children: React.ReactNode }> = ({ children }) 
       newUrl.searchParams.delete('ref');
       window.history.replaceState({}, '', newUrl.toString());
     }
-  }, [searchParams]);
+    
+    // Handle payment redirect from Paystack
+    const paymentStatus = searchParams.get('payment_status');
+    const transactionId = searchParams.get('transaction_id');
+    const reference = searchParams.get('reference') || searchParams.get('trxref');
+    
+    if (paymentStatus === 'success' && (transactionId || reference)) {
+      // Show success toast
+      successToast('Payment successful! Your poll promotion is pending approval.');
+      
+      // Clean up URL parameters
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('payment_status');
+      newUrl.searchParams.delete('transaction_id');
+      if (reference) {
+        newUrl.searchParams.delete('reference');
+        newUrl.searchParams.delete('trxref');
+      }
+      window.history.replaceState({}, '', newUrl.toString());
+    } else if (paymentStatus === 'failed' && (transactionId || reference)) {
+      // Show error toast
+      errorToast('Payment failed. Please try again or contact support.');
+      
+      // Clean up URL parameters
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('payment_status');
+      newUrl.searchParams.delete('transaction_id');
+      if (reference) {
+        newUrl.searchParams.delete('reference');
+        newUrl.searchParams.delete('trxref');
+      }
+      window.history.replaceState({}, '', newUrl.toString());
+    }
+  }, [searchParams, successToast, errorToast]);
   
   return <>{children}</>;
 };
@@ -66,71 +104,75 @@ const AppDiagnostics: React.FC = () => {
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <Router>
-          <ReferralHandler>
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
-              <Header />
-              <AppDiagnostics />
-              <HeaderAd />
-              <MobileAd />
-              <main className="pt-[164px] md:pt-[154px]">
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/polls" element={<PollsPage />} />
-                 <Route path="/polls/:slug" element={<PollDetailsPage />} />
-                  <Route path="/trivia" element={<TriviaPage />} />
-                  <Route path="/trivia/game/:gameId" element={
-                    <ProtectedRoute>
-                      <TriviaGamePage />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/leaderboard" element={<LeaderboardPage />} />
-                  <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-                  <Route path="/terms-of-service" element={<TermsOfServicePage />} />
-                  <Route 
-                    path="/admin" 
-                    element={
-                      <ProtectedRoute requiredRole="admin">
-                        <AdminDashboardPage />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="/dashboard" 
-                    element={
-                      <ProtectedRoute>
-                        <DashboardPage />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="/rewards" 
-                    element={
-                      <ProtectedRoute>
-                        <RewardsPage />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="/ambassador" 
-                    element={
-                      <ProtectedRoute requiredRole="ambassador">
-                        <AmbassadorPage />
-                      </ProtectedRoute>
-                    } 
-                  />
-                </Routes>
-              </main>
-              <Footer />
-              <CookieConsentBanner />
-            </div>
-          </ReferralHandler>
-          <Toaster />
-        </Router>
-      </AuthProvider>
-    </ThemeProvider>
+    <SettingsProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AdProvider>
+            <Router>
+              <ReferralHandler>
+                <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
+                  <Header />
+                  <AppDiagnostics />
+                  <HeaderAd />
+                  <MobileAd />
+                  <main className="pt-[164px] md:pt-[154px]">
+                    <Routes>
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/polls" element={<PollsPage />} />
+                     <Route path="/polls/:slug" element={<PollDetailsPage />} />
+                      <Route path="/trivia" element={<TriviaPage />} />
+                      <Route path="/trivia/game/:gameId" element={
+                        <ProtectedRoute>
+                          <TriviaGamePage />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="/leaderboard" element={<LeaderboardPage />} />
+                      <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+                      <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+                      <Route 
+                        path="/admin" 
+                        element={
+                          <ProtectedRoute requiredRole="admin">
+                            <AdminDashboardPage />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/dashboard" 
+                        element={
+                          <ProtectedRoute>
+                            <DashboardPage />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/rewards" 
+                        element={
+                          <ProtectedRoute>
+                            <RewardsPage />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/ambassador" 
+                        element={
+                          <ProtectedRoute requiredRole="ambassador">
+                            <AmbassadorPage />
+                          </ProtectedRoute>
+                        } 
+                      />
+                    </Routes>
+                  </main>
+                  <Footer />
+                  <CookieConsentBanner />
+                </div>
+              </ReferralHandler>
+              <Toaster />
+            </Router>
+          </AdProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </SettingsProvider>
   );
 }
 
