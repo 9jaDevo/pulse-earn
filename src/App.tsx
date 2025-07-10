@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useSearchParams } from 'react-r
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AdProvider } from './contexts/AdContext';
-import { SettingsProvider } from './contexts/SettingsContext';
+import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { Header } from './components/layout/Header';
 import { MobileAd } from './components/ads/MobileAd';
 import { Footer } from './components/layout/Footer';
@@ -27,6 +27,111 @@ import { PWAInstallPrompt } from './components/ui/PWAInstallPrompt';
 import { Toaster } from './components/ui/Toast';
 import { CookieConsentBanner } from './components/layout/CookieConsentBanner';
 import { useToast } from './hooks/useToast';
+
+// Main App content component that has access to settings context
+const AppContent: React.FC = () => {
+  const { generalSettings } = useSettings();
+  
+  return (
+    <>
+      <SchemaMarkup 
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "name": generalSettings.platformName || "PollPeak",
+          "url": window.location.origin,
+          "description": generalSettings.platformDescription || "Community-powered platform for polls, trivia, daily rewards and earning opportunities",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": `${window.location.origin}/polls?search={search_term_string}`,
+            "query-input": "required name=search_term_string"
+          }
+        }}
+        id="website-schema"
+      />
+      <SchemaMarkup 
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          "name": generalSettings.platformName || "PollPeak",
+          "url": window.location.origin,
+          "logo": `${window.location.origin}${generalSettings.logoUrl || "/assets/PollPeak.png"}`,
+          "sameAs": [
+            "https://twitter.com/pollpeak",
+            "https://facebook.com/pollpeak",
+            "https://instagram.com/pollpeak"
+          ]
+        }}
+        id="organization-schema"
+      />
+      <AuthProvider>
+        <AdProvider>
+          <Router>
+            <ReferralHandler>
+              <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
+                <Header />
+                <AppDiagnostics />
+                <MobileAd />
+                <main className="pt-[94px] md:pt-[84px]">
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/polls" element={<PollsPage />} />
+                   <Route path="/polls/:slug" element={<PollDetailsPage />} />
+                    <Route path="/trivia" element={<TriviaPage />} />
+                    <Route path="/trivia/game/:gameId" element={
+                      <ProtectedRoute>
+                        <TriviaGamePage />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/leaderboard" element={<LeaderboardPage />} />
+                    <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+                    <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+                    <Route 
+                      path="/admin" 
+                      element={
+                        <ProtectedRoute requiredRole="admin">
+                          <AdminDashboardPage />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/dashboard" 
+                      element={
+                        <ProtectedRoute>
+                          <DashboardPage />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/rewards" 
+                      element={
+                        <ProtectedRoute>
+                          <RewardsPage />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/ambassador" 
+                      element={
+                        <ProtectedRoute requiredRole="ambassador">
+                          <AmbassadorPage />
+                        </ProtectedRoute>
+                      } 
+                    />
+                  </Routes>
+                </main>
+                <Footer />
+                <CookieConsentBanner />
+                <PWAInstallPrompt />
+              </div>
+            </ReferralHandler>
+            <Toaster />
+          </Router>
+        </AdProvider>
+      </AuthProvider>
+    </>
+  );
+};
 
 // Component to handle referral codes and payment redirects from URL
 const ReferralHandler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -107,101 +212,7 @@ function App() {
   return (
     <SettingsProvider>
       <ThemeProvider>
-        <SchemaMarkup 
-          schema={{
-            "@context": "https://schema.org",
-            "@type": "WebSite",
-            "name": generalSettings.platformName || "PollPeak",
-            "url": window.location.origin,
-            "description": generalSettings.platformDescription || "Community-powered platform for polls, trivia, daily rewards and earning opportunities",
-            "potentialAction": {
-              "@type": "SearchAction",
-              "target": `${window.location.origin}/polls?search={search_term_string}`,
-              "query-input": "required name=search_term_string"
-            }
-          }}
-          id="website-schema"
-        />
-        <SchemaMarkup 
-          schema={{
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "name": generalSettings.platformName || "PollPeak",
-            "url": window.location.origin,
-            "logo": `${window.location.origin}${generalSettings.logoUrl || "/assets/PollPeak.png"}`,
-            "sameAs": [
-              "https://twitter.com/pollpeak",
-              "https://facebook.com/pollpeak",
-              "https://instagram.com/pollpeak"
-            ]
-          }}
-          id="organization-schema"
-        />
-        <AuthProvider>
-          <AdProvider>
-            <Router>
-              <ReferralHandler>
-                <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
-                  <Header />
-                  <AppDiagnostics />
-                  <MobileAd />
-                  <main className="pt-[94px] md:pt-[84px]">
-                    <Routes>
-                      <Route path="/" element={<HomePage />} />
-                      <Route path="/polls" element={<PollsPage />} />
-                     <Route path="/polls/:slug" element={<PollDetailsPage />} />
-                      <Route path="/trivia" element={<TriviaPage />} />
-                      <Route path="/trivia/game/:gameId" element={
-                        <ProtectedRoute>
-                          <TriviaGamePage />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="/leaderboard" element={<LeaderboardPage />} />
-                      <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-                      <Route path="/terms-of-service" element={<TermsOfServicePage />} />
-                      <Route 
-                        path="/admin" 
-                        element={
-                          <ProtectedRoute requiredRole="admin">
-                            <AdminDashboardPage />
-                          </ProtectedRoute>
-                        } 
-                      />
-                      <Route 
-                        path="/dashboard" 
-                        element={
-                          <ProtectedRoute>
-                            <DashboardPage />
-                          </ProtectedRoute>
-                        } 
-                      />
-                      <Route 
-                        path="/rewards" 
-                        element={
-                          <ProtectedRoute>
-                            <RewardsPage />
-                          </ProtectedRoute>
-                        } 
-                      />
-                      <Route 
-                        path="/ambassador" 
-                        element={
-                          <ProtectedRoute requiredRole="ambassador">
-                            <AmbassadorPage />
-                          </ProtectedRoute>
-                        } 
-                      />
-                    </Routes>
-                  </main>
-                  <Footer />
-                  <CookieConsentBanner />
-                  <PWAInstallPrompt />
-                </div>
-              </ReferralHandler>
-              <Toaster />
-            </Router>
-          </AdProvider>
-        </AuthProvider>
+        <AppContent />
       </ThemeProvider>
     </SettingsProvider>
   );
