@@ -22,6 +22,7 @@ import { TermsOfServicePage } from './pages/TermsOfServicePage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { useScrollToTop } from './hooks/useScrollToTop';
 import { useAuth } from './contexts/AuthContext';
+import { PWAInstallPrompt } from './components/ui/PWAInstallPrompt';
 import { Toaster } from './components/ui/Toast';
 import { CookieConsentBanner } from './components/layout/CookieConsentBanner';
 import { useToast } from './hooks/useToast';
@@ -163,6 +164,7 @@ function App() {
                   </main>
                   <Footer />
                   <CookieConsentBanner />
+                  <PWAInstallPrompt />
                 </div>
               </ReferralHandler>
               <Toaster />
