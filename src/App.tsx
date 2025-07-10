@@ -115,7 +115,7 @@ function App() {
                   <AppDiagnostics />
                   <HeaderAd />
                   <MobileAd />
-                  <main className="pt-[164px] md:pt-[154px]">
+                  <main className="pt-[174px] md:pt-[164px]">
                     <Routes>
                       <Route path="/" element={<HomePage />} />
                       <Route path="/polls" element={<PollsPage />} />

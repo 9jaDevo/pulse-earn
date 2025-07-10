@@ -59,24 +59,24 @@ export const HomePage: React.FC = () => {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <div className="flex justify-center mb-8">
-              <div className="bg-gradient-to-r from-primary-500 to-secondary-500 p-4 rounded-2xl animate-bounce-gentle">
-                <Zap className="h-12 w-12 text-white" />
+              <div className="p-4 rounded-2xl animate-bounce-gentle">
+                <img src="/assets/PollPeak.png" alt="PollPeak" className="h-16 w-auto" />
               </div>
             </div>
             <h1 className="text-4xl sm:text-6xl font-bold text-gray-900 mb-6">
               Earn Through
-              <span className="block bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+              <span className="block bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent">
                 Community Engagement
               </span>
             </h1>
             <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
-              Join PulseEarn and turn your opinions into rewards. Participate in polls, 
+              Join PollPeak and turn your opinions into rewards. Participate in polls, 
               master trivia challenges, and earn real rewards through our ambassador program.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
                 to="/polls"
-                className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-8 py-4 rounded-xl font-semibold hover:from-primary-700 hover:to-primary-800 transform hover:scale-105 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg"
+                className="bg-gradient-to-r from-primary-500 to-primary-600 text-white px-8 py-4 rounded-xl font-semibold hover:from-primary-600 hover:to-primary-700 transform hover:scale-105 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg"
               >
                 <span>Start Earning Now</span>
                 <ArrowRight className="h-5 w-5" />
@@ -121,7 +121,7 @@ export const HomePage: React.FC = () => {
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
               Everything You Need to
-              <span className="block bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+              <span className="block bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent">
                 Earn & Engage
               </span>
             </h2>
@@ -207,7 +207,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-br from-primary-600 to-secondary-600">
+      <section className="py-20 bg-gradient-to-br from-primary-500 to-secondary-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="max-w-3xl mx-auto">
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">

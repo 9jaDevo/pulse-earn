@@ -21,15 +21,15 @@ export const Footer: React.FC = () => {
               {generalSettings.logoUrl ? (
                 <img 
                   src={generalSettings.logoUrl} 
-                  alt={generalSettings.platformName || "PulseEarn"} 
+                  alt={generalSettings.platformName || "PollPeak"} 
                   className="h-10 w-auto"
                 />
               ) : (
                 <>
-                  <div className="bg-gradient-to-r from-primary-500 to-secondary-500 p-2 rounded-lg">
-                    <Zap className="h-6 w-6 text-white" />
+                  <div className="p-2 rounded-lg">
+                    <img src="/assets/PollPeak.png" alt="PollPeak" className="h-8 w-auto" />
                   </div>
-                  <span className="text-xl font-bold">{generalSettings.platformName || "PulseEarn"}</span>
+                  <span className="text-xl font-bold">{generalSettings.platformName || "PollPeak"}</span>
                 </>
               )}
             </div>
@@ -110,7 +110,7 @@ export const Footer: React.FC = () => {
 
         <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
           <div className="flex flex-col md:flex-row justify-between items-center">
-            <p>&copy; {new Date().getFullYear()} {generalSettings.platformName || "PulseEarn"}. All rights reserved. Built for the community, by the community.</p>
+            <p>&copy; {new Date().getFullYear()} {generalSettings.platformName || "PollPeak"}. All rights reserved. Built for the community, by the community.</p>
             <div className="flex space-x-6 mt-4 md:mt-0">
               <Link 
                 to="/privacy-policy" 
