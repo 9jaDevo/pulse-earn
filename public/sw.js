@@ -10,8 +10,16 @@ const ASSETS_TO_CACHE = [
   '/assets/favicon-16x16.png',
   '/assets/favicon-32x32.png',
   '/assets/apple-touch-icon.png',
-  '/assets/icon-192.webp',
-  '/assets/icon-512.webp'
+  '/assets/icons/icon-48x48.webp',
+  '/assets/icons/icon-72x72.webp',
+  '/assets/icons/icon-96x96.webp',
+  '/assets/icons/icon-128x128.webp',
+  '/assets/icons/icon-144x144.webp',
+  '/assets/icons/icon-152x152.webp',
+  '/assets/icons/icon-192x192.webp',
+  '/assets/icons/icon-256x256.webp',
+  '/assets/icons/icon-384x384.webp',
+  '/assets/icons/icon-512x512.webp'
 ];
 
 // Install event - cache assets

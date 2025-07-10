@@ -76,7 +76,7 @@ export const PWAInstallPrompt: React.FC = () => {
       
       <div className="flex items-start space-x-3">
         <div className="bg-primary-100 p-2 rounded-lg">
-          <img src="/assets/icon-192.webp" alt="PollPeak" className="w-10 h-10" />
+          <img src="/assets/icons/icon-192x192.webp" alt="PollPeak" className="w-10 h-10" />
         </div>
         <div>
           <h3 className="font-medium text-gray-900">Install PollPeak</h3>
