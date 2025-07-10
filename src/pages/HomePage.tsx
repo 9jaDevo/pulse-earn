@@ -45,7 +45,7 @@ export const HomePage: React.FC = () => {
   return (
     <div className="animate-fade-in">
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-white py-20 sm:py-32">
+      <section className="relative overflow-hidden bg-white py-16 sm:py-24">
         {/* Abstract background shapes */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-primary-50 opacity-70"></div>
@@ -86,21 +86,6 @@ export const HomePage: React.FC = () => {
                 </Link>
               </div>
               
-              {/* Stats preview */}
-              <div className="grid grid-cols-3 gap-4 mt-12 mx-auto animate-slide-up" style={{animationDelay: "0.3s"}}>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-primary-500">50K+</p>
-                  <p className="text-sm text-gray-500">Active Users</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-secondary-500">10K+</p>
-                  <p className="text-sm text-gray-500">Daily Polls</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-accent-500">1M+</p>
-                  <p className="text-sm text-gray-500">Points Earned</p>
-                </div>
-              </div>
             </div>
           </div>
         </div>
