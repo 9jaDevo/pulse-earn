@@ -24,6 +24,7 @@ import { PollCommentSection } from '../components/polls/PollCommentSection';
 import { PollAnalytics } from '../components/polls/PollAnalytics';
 import { ReportContentModal } from '../components/polls/ReportContentModal';
 import { supabase } from '../lib/supabase';
+import SchemaMarkup from '../components/ui/SchemaMarkup';
 import { ContentAd } from '../components/ads/ContentAd';
 import { SidebarAd } from '../components/ads/SidebarAd';
 import { useToast } from '../hooks/useToast';
@@ -258,6 +259,33 @@ export const PollDetailsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {poll && (
+          <SchemaMarkup
+            schema={{
+              "@context": "https://schema.org",
+              "@type": "QAPage",
+              "mainEntity": {
+                "@type": "Question",
+                "name": poll.title,
+                "text": poll.description || poll.title,
+                "answerCount": poll.options.length,
+                "dateCreated": poll.created_at,
+                "author": {
+                  "@type": "Person",
+                  "name": creatorName || "Anonymous"
+                },
+                "suggestedAnswer": poll.options.map((option, index) => ({
+                  "@type": "Answer",
+                  "text": option.text,
+                  "dateCreated": poll.created_at,
+                  "upvoteCount": option.votes,
+                  "url": `${window.location.href}#option-${index}`
+                }))
+              }
+            }}
+            id={`poll-schema-${poll.id}`}
+          />
+        )}
         {/* Back Button */}
         <button
           onClick={() => navigate('/polls')}

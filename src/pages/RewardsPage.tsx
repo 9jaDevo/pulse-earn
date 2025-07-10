@@ -30,6 +30,7 @@ import { ContentAd } from '../components/ads/ContentAd';
 import { SpinWinModal } from '../components/rewards/SpinWinModal';
 import { useToast } from '../hooks/useToast';
 import getSymbolFromCurrency from 'currency-symbol-map';
+import SchemaMarkup from '../components/ui/SchemaMarkup';
 
 export const RewardsPage: React.FC = () => {
   const { user, profile, updateProfile } = useAuth();
@@ -674,6 +675,32 @@ export const RewardsPage: React.FC = () => {
         {activeTab === 'store' && (
           <div className="space-y-6">
             {/* Currency and Item Type Filters */}
+            {storeItems.map(item => (
+              <SchemaMarkup
+                key={`schema-${item.id}`}
+                schema={{
+                  "@context": "https://schema.org",
+                  "@type": "Product",
+                  "productID": item.id,
+                  "name": item.name,
+                  "description": item.description || `${item.name} - Reward item`,
+                  "image": item.image_url || `${window.location.origin}/assets/gift-icon.png`,
+                  "offers": {
+                    "@type": "Offer",
+                    "price": item.points_cost,
+                    "priceCurrency": "POINTS",
+                    "availability": item.stock_quantity === null || item.stock_quantity > 0 ? 
+                      "https://schema.org/InStock" : 
+                      "https://schema.org/OutOfStock"
+                  },
+                  "brand": {
+                    "@type": "Brand",
+                    "name": "PollPeak Rewards"
+                  }
+                }}
+                id={`product-schema-${item.id}`}
+              />
+            ))}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 mb-4">
               <div className="flex flex-col md:flex-row gap-4">
                 {/* Currency Selector */}

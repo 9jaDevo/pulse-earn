@@ -8,6 +8,7 @@ import { Header } from './components/layout/Header';
 import { MobileAd } from './components/ads/MobileAd';
 import { Footer } from './components/layout/Footer';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import SchemaMarkup from './components/ui/SchemaMarkup';
 import { HomePage } from './pages/HomePage';
 import { PollsPage } from './pages/PollsPage';
 import { TriviaPage } from './pages/TriviaPage';
@@ -106,6 +107,36 @@ function App() {
   return (
     <SettingsProvider>
       <ThemeProvider>
+        <SchemaMarkup 
+          schema={{
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": generalSettings.platformName || "PollPeak",
+            "url": window.location.origin,
+            "description": generalSettings.platformDescription || "Community-powered platform for polls, trivia, daily rewards and earning opportunities",
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": `${window.location.origin}/polls?search={search_term_string}`,
+              "query-input": "required name=search_term_string"
+            }
+          }}
+          id="website-schema"
+        />
+        <SchemaMarkup 
+          schema={{
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            "name": generalSettings.platformName || "PollPeak",
+            "url": window.location.origin,
+            "logo": `${window.location.origin}${generalSettings.logoUrl || "/assets/PollPeak.png"}`,
+            "sameAs": [
+              "https://twitter.com/pollpeak",
+              "https://facebook.com/pollpeak",
+              "https://instagram.com/pollpeak"
+            ]
+          }}
+          id="organization-schema"
+        />
         <AuthProvider>
           <AdProvider>
             <Router>

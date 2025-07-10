@@ -1,5 +1,6 @@
 import React from 'react';
 import { FileText, Users, Shield, AlertTriangle, Scale, Gavel } from 'lucide-react';
+import SchemaMarkup from '../components/ui/SchemaMarkup';
 
 export const TermsOfServicePage: React.FC = () => {
   // Scroll to top when component mounts
@@ -9,6 +10,39 @@ export const TermsOfServicePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
+      <SchemaMarkup
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What are the Terms of Service?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "These Terms of Service govern your use of the PollPeak platform, website, and services. By accessing or using our Service, you agree to be bound by these Terms. If you disagree with any part of these terms, then you may not access the Service."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What is the Points and Rewards System?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "You can earn points through legitimate participation in platform activities including voting in polls (50 points per vote), completing daily trivia challenges (10-30 points based on difficulty), daily login streaks (bonus multipliers), watching advertisements (15 points per ad), and successful referrals (100-150 points). Points can be redeemed for various rewards as available in our reward store. Reward availability and point values may change at our discretion. Points have no cash value and cannot be transferred between accounts."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What is the Ambassador Program?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Our Ambassador Program allows eligible users to earn commissions by referring new users to the platform. The commission structure includes Bronze (0-24 referrals): 10% commission, Silver (25-99 referrals): 15% commission, Gold (100-249 referrals): 20% commission, and Platinum (250+ referrals): 25% commission. Ambassador status and commissions are subject to our review and may be revoked for violations of these Terms or fraudulent activity."
+              }
+            }
+          ]
+        }}
+        id="terms-of-service-schema"
+      />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-12">
