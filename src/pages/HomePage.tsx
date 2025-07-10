@@ -54,9 +54,8 @@ export const HomePage: React.FC = () => {
         </div>
         
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 z-10">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-12">
-            {/* Left column - Text content */}
-            <div className="flex-1 text-left max-w-xl">
+          <div className="flex flex-col items-center justify-center">
+            <div className="text-center max-w-2xl mx-auto">
               <div className="inline-flex items-center px-4 py-2 rounded-full bg-primary-50 text-primary-600 mb-6 animate-fade-in">
                 <span className="text-sm font-medium">Community-Powered Insights</span>
                 <ChevronRight className="h-4 w-4 ml-1" />
@@ -70,7 +69,7 @@ export const HomePage: React.FC = () => {
               <p className="text-xl text-gray-600 mb-8 leading-relaxed animate-slide-up" style={{animationDelay: "0.1s"}}>
                 Join PollPeak and transform your opinions into rewards. Create polls, vote on trending topics, and earn points through our interactive community platform.
               </p>
-              <div className="flex flex-wrap gap-4 animate-slide-up" style={{animationDelay: "0.2s"}}>
+              <div className="flex flex-wrap justify-center gap-4 animate-slide-up" style={{animationDelay: "0.2s"}}>
                 <Link
                   to="/polls"
                   className="bg-primary-500 text-white px-8 py-4 rounded-lg font-semibold hover:bg-primary-600 transform hover:translate-y-[-2px] transition-all duration-200 flex items-center justify-center space-x-2 shadow-md"
@@ -88,7 +87,7 @@ export const HomePage: React.FC = () => {
               </div>
               
               {/* Stats preview */}
-              <div className="grid grid-cols-3 gap-4 mt-12 animate-slide-up" style={{animationDelay: "0.3s"}}>
+              <div className="grid grid-cols-3 gap-4 mt-12 mx-auto animate-slide-up" style={{animationDelay: "0.3s"}}>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-primary-500">50K+</p>
                   <p className="text-sm text-gray-500">Active Users</p>
@@ -101,35 +100,6 @@ export const HomePage: React.FC = () => {
                   <p className="text-2xl font-bold text-accent-500">1M+</p>
                   <p className="text-sm text-gray-500">Points Earned</p>
                 </div>
-              </div>
-            </div>
-            
-            {/* Right column - Visual element */}
-            <div className="flex-1 relative animate-slide-up" style={{animationDelay: "0.4s"}}>
-              <div className="relative w-full max-w-md mx-auto">
-                {/* Main logo */}
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20">
-                  <img src="/assets/PollPeak.png" alt="PollPeak" className="h-32 w-auto" />
-                </div>
-                
-                {/* Decorative elements */}
-                <div className="absolute top-0 left-0 w-full h-full">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary-100 rounded-full opacity-80"></div>
-                  <div className="absolute bottom-12 left-12 w-24 h-24 bg-secondary-100 rounded-full opacity-80"></div>
-                  <div className="absolute top-1/4 left-1/4 w-16 h-16 bg-accent-100 rounded-full opacity-80"></div>
-                  
-                  {/* Stylized bar chart */}
-                  <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 flex items-end space-x-3 h-64 w-64">
-                    <div className="w-8 bg-primary-400 rounded-t-lg h-32 opacity-80"></div>
-                    <div className="w-8 bg-secondary-400 rounded-t-lg h-48 opacity-80"></div>
-                    <div className="w-8 bg-accent-400 rounded-t-lg h-40 opacity-80"></div>
-                    <div className="w-8 bg-success-400 rounded-t-lg h-56 opacity-80"></div>
-                    <div className="w-8 bg-primary-400 rounded-t-lg h-24 opacity-80"></div>
-                  </div>
-                </div>
-                
-                {/* Background card */}
-                <div className="w-full h-96 bg-white rounded-2xl shadow-xl border border-gray-100"></div>
               </div>
             </div>
           </div>
