@@ -5,7 +5,6 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { AdProvider } from './contexts/AdContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { Header } from './components/layout/Header';
-import { HeaderAd } from './components/ads/HeaderAd';
 import { MobileAd } from './components/ads/MobileAd';
 import { Footer } from './components/layout/Footer';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
@@ -113,9 +112,8 @@ function App() {
                 <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
                   <Header />
                   <AppDiagnostics />
-                  <HeaderAd />
                   <MobileAd />
-                  <main className="pt-[174px] md:pt-[164px]">
+                  <main className="pt-[94px] md:pt-[84px]">
                     <Routes>
                       <Route path="/" element={<HomePage />} />
                       <Route path="/polls" element={<PollsPage />} />
