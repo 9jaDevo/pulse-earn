@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Brain, Clock, Trophy, Star, Zap, Users, Target, Award } from 'lucide-react';
+import { Brain, Clock, Trophy, Star, Zap, Users, Target, Award, Calendar, DollarSign } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { RewardService, type TriviaGameSummary } from '../services/rewardService';
 import { Link, useNavigate } from 'react-router-dom';
@@ -8,6 +8,24 @@ import { SidebarAd } from '../components/ads/SidebarAd';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../hooks/useToast';
 import { useCountdown, getNextMidnightUTC } from '../hooks/useCountdown'; 
+
+interface Contest {
+  id: string;
+  title: string;
+  description: string;
+  entry_fee: number;
+  start_time: string;
+  end_time: string;
+  status: 'upcoming' | 'enrolling' | 'active' | 'ended' | 'disbursed' | 'cancelled';
+  prize_pool_amount: number;
+  prize_pool_currency: string;
+  trivia_game?: {
+    title: string;
+  };
+  user_enrollment?: {
+    payment_status: string;
+  };
+}
 
 export const TriviaPage: React.FC = () => {
   const { user, profile } = useAuth();
@@ -18,6 +36,7 @@ export const TriviaPage: React.FC = () => {
   const [categories, setCategories] = useState<string[]>([]);
   const [difficulties, setDifficulties] = useState<string[]>([]);
   const [triviaGames, setTriviaGames] = useState<TriviaGameSummary[]>([]);
+  const [contests, setContests] = useState<Contest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({
@@ -40,6 +59,7 @@ export const TriviaPage: React.FC = () => {
 
   useEffect(() => {
     fetchTriviaData();
+    fetchContests();
   }, []);
   
   useEffect(() => {
@@ -88,6 +108,32 @@ export const TriviaPage: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Failed to load trivia data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchContests = async () => {
+    try {
+      let query = supabase
+        .from('trivia_contests')
+        .select(`
+          *,
+          trivia_game:trivia_games(title)
+        `)
+        .order('start_time', { ascending: true });
+
+      if (user) {
+        query = query.select(`
+          *,
+          trivia_game:trivia_games(title),
+          user_enrollment:contest_enrollments!left(payment_status)
+        `);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setContests(data || []);
+    } catch (error) {
+      console.error('Error fetching contests:', error);
     }
   };
   
@@ -186,6 +232,49 @@ export const TriviaPage: React.FC = () => {
       setTotalTriviaGames(count || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load trivia games');
+    }
+  };
+
+  const handleEnrollContest = async (contestId: string, entryFee: number) => {
+    if (!user) {
+      errorToast('Please sign in to enroll in contests');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.rpc('enroll_in_contest_with_points', {
+        p_user_id: user.id,
+        p_contest_id: contestId
+      });
+
+      if (error) throw error;
+
+      errorToast('Successfully enrolled in contest!');
+      fetchContests();
+    } catch (error) {
+      console.error('Error enrolling in contest:', error);
+      errorToast('Failed to enroll in contest');
+    }
+  };
+
+  const canPlayContest = (contest: Contest) => {
+    return contest.status === 'active' && 
+           contest.user_enrollment?.payment_status === 'paid';
+  };
+
+  const canEnrollContest = (contest: Contest) => {
+    return (contest.status === 'upcoming' || contest.status === 'enrolling') &&
+           !contest.user_enrollment;
+  };
+
+  const getContestStatusColor = (status: Contest['status']) => {
+    switch (status) {
+      case 'upcoming': return 'bg-blue-100 text-blue-800';
+      case 'enrolling': return 'bg-green-100 text-green-800';
+      case 'active': return 'bg-yellow-100 text-yellow-800';
+      case 'ended': return 'bg-orange-100 text-orange-800';
+      case 'disbursed': return 'bg-purple-100 text-purple-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -488,6 +577,83 @@ export const TriviaPage: React.FC = () => {
           {/* Sidebar Ad */}
           <div className="hidden lg:block w-80">
             <SidebarAd />
+          </div>
+        </div>
+
+        {/* Contests Section */}
+        <div className="mt-12">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Trivia Contests</h2>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {contests.map((contest) => (
+              <div key={contest.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1">{contest.title}</h3>
+                      <p className="text-sm text-gray-600 mb-2">{contest.trivia_game?.title}</p>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getContestStatusColor(contest.status)}`}>
+                        {contest.status}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">{contest.description}</p>
+                  
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Entry Fee:</span>
+                      <span className="font-medium">{contest.entry_fee} points</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Prize Pool:</span>
+                      <span className="font-medium text-green-600">
+                        {contest.prize_pool_currency} {contest.prize_pool_amount}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-sm text-gray-500">
+                      <Calendar className="w-3 h-3" />
+                      <span>{new Date(contest.start_time).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-sm text-gray-500">
+                      <Clock className="w-3 h-3" />
+                      <span>{new Date(contest.start_time).toLocaleTimeString()} - {new Date(contest.end_time).toLocaleTimeString()}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    {canEnrollContest(contest) && (
+                      <button
+                        onClick={() => handleEnrollContest(contest.id, contest.entry_fee)}
+                        className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                      >
+                        Enroll Now
+                      </button>
+                    )}
+                    {canPlayContest(contest) && (
+                      <Link
+                        to={`/contest/${contest.id}`}
+                        className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium text-center"
+                      >
+                        Play Now
+                      </Link>
+                    )}
+                    {contest.user_enrollment && (
+                      <div className="flex-1 bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium text-center">
+                        {contest.user_enrollment.payment_status === 'paid' ? 'Enrolled' : 'Payment Pending'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {contests.length === 0 && (
+              <div className="col-span-full text-center py-12">
+                <Trophy className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No contests available</h3>
+                <p className="mt-1 text-sm text-gray-500">Check back later for new contests.</p>
+              </div>
+            )}
           </div>
         </div>
 

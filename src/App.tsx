@@ -13,6 +13,7 @@ import { HomePage } from './pages/HomePage';
 import { PollsPage } from './pages/PollsPage';
 import { TriviaPage } from './pages/TriviaPage';
 import { TriviaGamePage } from './pages/TriviaGamePage';
+import { ContestGamePage } from './pages/ContestGamePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { PollDetailsPage } from './pages/PollDetailsPage';
 import { RewardsPage } from './pages/RewardsPage';
@@ -81,6 +82,7 @@ const AppContent: React.FC = () => {
                         <TriviaGamePage />
                       </ProtectedRoute>
                     } />
+                    <Route path="/contest/:contestId" element={<ContestGamePage />} />
                     <Route path="/leaderboard" element={<LeaderboardPage />} />
                     <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
                     <Route path="/terms-of-service" element={<TermsOfServicePage />} />
