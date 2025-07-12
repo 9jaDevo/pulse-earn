@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   FileText, 
   BarChart3, 
-  Brain, 
+  Brain,
+  Cpu,
   Plus, 
   Search, 
   Filter,
@@ -21,7 +22,9 @@ import { RewardService } from '../../services/rewardService';
 import { BadgeService } from '../../services/badgeService';
 import { useToast } from '../../hooks/useToast';
 import { useAuth } from '../../contexts/AuthContext';
+import { GeneratePollsModal } from './GeneratePollsModal';
 import { supabase } from '../../lib/supabase';
+import { EditPollModal } from '../polls/EditPollModal';
 import type { PollCategory, TriviaGame, TriviaGameSummary, TriviaQuestion, Badge } from '../../types/api';
 import { AddEditTriviaGameModal } from './AddEditTriviaGameModal';
 import { AddEditTriviaQuestionModal } from './AddEditTriviaQuestionModal';
@@ -53,6 +56,8 @@ export const ContentManagement: React.FC = () => {
   const [totalPolls, setTotalPolls] = useState(0);
   const [pollsPerPage] = useState(10);
   const [showCreatePollModal, setShowCreatePollModal] = useState(false);
+  const [showEditPollModal, setShowEditPollModal] = useState(false);
+  const [selectedPoll, setSelectedPoll] = useState<any>(null);
 
   // Trivia state
   const [triviaGames, setTriviaGames] = useState<TriviaGameSummary[]>([]);
@@ -61,6 +66,7 @@ export const ContentManagement: React.FC = () => {
   const [showTriviaGameModal, setShowTriviaGameModal] = useState(false);
   const [showTriviaQuestionModal, setShowTriviaQuestionModal] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<TriviaQuestion | null>(null);
+  const [showGeneratePollsModal, setShowGeneratePollsModal] = useState(false);
   const [triviaPage, setTriviaPage] = useState(1);
   const [totalTriviaGames, setTotalTriviaGames] = useState(0);
   const [triviaPerPage] = useState(10);
@@ -284,6 +290,11 @@ export const ContentManagement: React.FC = () => {
       errorToast('Failed to update category');
       console.error(err);
     }
+  };
+
+  const handleEditPoll = (poll: any) => {
+    setSelectedPoll(poll);
+    setShowEditPollModal(true);
   };
 
   const handleDeletePoll = async (pollId: string) => {
@@ -625,13 +636,22 @@ export const ContentManagement: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-gray-900">Poll Management</h2>
-        <button 
-          onClick={() => setShowCreatePollModal(true)}
-          className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors flex items-center space-x-2"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Create Poll</span>
-        </button>
+        <div className="flex space-x-2">
+          <button 
+            onClick={() => setShowGeneratePollsModal(true)}
+            className="bg-secondary-600 text-white px-4 py-2 rounded-lg hover:bg-secondary-700 transition-colors flex items-center space-x-2"
+          >
+            <Cpu className="h-4 w-4" />
+            <span>Generate with AI</span>
+          </button>
+          <button 
+            onClick={() => setShowCreatePollModal(true)}
+            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors flex items-center space-x-2"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Create Poll</span>
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -702,7 +722,9 @@ export const ContentManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        <button className="text-primary-600 hover:text-primary-900">
+                        <button 
+                          onClick={() => handleEditPoll(poll)}
+                          className="text-primary-600 hover:text-primary-900">
                           <Edit className="h-4 w-4" />
                         </button>
                         <button 
@@ -1191,7 +1213,25 @@ export const ContentManagement: React.FC = () => {
           onPollCreated={(poll) => {
             setPolls(prev => [poll, ...prev]);
             setShowCreatePollModal(false);
-            successToast('Poll created successfully');
+            successToast('Poll created successfully!');
+          }}
+          userId={user.id}
+        />
+      )}
+      
+      {/* Edit Poll Modal */}
+      {showEditPollModal && selectedPoll && user && (
+        <EditPollModal
+          poll={selectedPoll}
+          onClose={() => {
+            setShowEditPollModal(false);
+            setSelectedPoll(null);
+          }}
+          onPollUpdated={(updatedPoll) => {
+            setPolls(prev => prev.map(p => p.id === updatedPoll.id ? updatedPoll : p));
+            setShowEditPollModal(false);
+            setSelectedPoll(null);
+            successToast('Poll updated successfully!');
           }}
           userId={user.id}
         />
@@ -1246,6 +1286,15 @@ export const ContentManagement: React.FC = () => {
             setSelectedBadge(null);
           }}
           badge={selectedBadge}
+        />
+      )}
+      
+      {/* Generate Polls Modal */}
+      {showGeneratePollsModal && (
+        <GeneratePollsModal
+          isOpen={showGeneratePollsModal}
+          onClose={() => setShowGeneratePollsModal(false)}
+          onPollsGenerated={fetchPolls}
         />
       )}
     </div>
