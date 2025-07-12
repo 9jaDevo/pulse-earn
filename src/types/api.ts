@@ -167,6 +167,7 @@ export interface TriviaGameSummary {
   pointsReward: number;
   estimatedTime: string;
   is_active?: boolean;
+  hasPlayed?: boolean;
 }
 
 export interface TriviaGameSession {
