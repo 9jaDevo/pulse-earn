@@ -24,14 +24,14 @@ interface SettingsContextType {
 }
 
 const defaultGeneralSettings: GeneralSettings = {
-  platformName: 'PulseEarn',
+  platformName: 'PollPeak',
   platformDescription: 'Community-powered platform for polls, trivia, and rewards',
   defaultLanguage: 'en',
   defaultTheme: 'system',
   allowThemeSelection: true,
-  logoUrl: '/assets/logo.png',
+  logoUrl: '/assets/PollPeak.png',
   faviconUrl: '/assets/favicon.ico',
-  seoKeywords: 'polls, trivia, rewards, community, earning, games',
+  seoKeywords: 'polls, trivia, rewards, community, voting, games',
   ogImageUrl: '',
   marketingEnabled: true
 };
@@ -94,7 +94,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Update document title
     document.title = generalSettings.platformName 
       ? `${generalSettings.platformName} - Community Platform for Polls, Trivia & Rewards` 
-      : 'PulseEarn - Community Platform for Polls, Trivia & Rewards';
+      : 'PollPeak - Community Platform for Polls, Trivia & Rewards';
     
     // Update meta description
     const metaDescription = document.querySelector('meta[name="description"]');
@@ -118,7 +118,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       ogTitle.setAttribute('property', 'og:title');
       document.head.appendChild(ogTitle);
     }
-    ogTitle.setAttribute('content', `${generalSettings.platformName || 'PulseEarn'} - Earn Through Community Engagement`);
+    ogTitle.setAttribute('content', `${generalSettings.platformName || 'PollPeak'} - Earn Through Community Engagement`);
     
     // Update Open Graph description
     let ogDescription = document.querySelector('meta[property="og:description"]');

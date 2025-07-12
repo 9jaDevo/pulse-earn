@@ -1,5 +1,6 @@
 import React from 'react';
 import { Shield, Eye, Lock, Database, Globe, Mail } from 'lucide-react';
+import SchemaMarkup from '../components/ui/SchemaMarkup';
 
 export const PrivacyPolicyPage: React.FC = () => {
   // Scroll to top when component mounts
@@ -9,6 +10,39 @@ export const PrivacyPolicyPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
+      <SchemaMarkup
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What information do you collect?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "We collect personal information that you voluntarily provide to us when you register for an account, participate in polls or trivia games, contact us for support, subscribe to our newsletter, or use our referral program. This information may include your name, email address, country of residence, profile picture, referral codes, and communication preferences."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do you use my information?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "We use your information to provide and maintain our services, process poll votes and trivia responses, calculate points and rewards, manage user accounts and profiles, send important platform updates, respond to support requests, notify about new features, process referral rewards, analyze usage patterns, improve platform performance, develop new features, personalize user experience, comply with legal obligations, prevent fraud and abuse, enforce our terms of service, and protect user safety."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Do you share my information with third parties?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "We do not sell, trade, or rent your personal information to third parties. We may share your information with trusted third-party service providers who assist us in operating our platform, such as hosting, analytics, and customer support services. We may also disclose information if required by law, court order, or government request, or to protect our rights, property, or safety."
+              }
+            }
+          ]
+        }}
+        id="privacy-policy-schema"
+      />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-12">
