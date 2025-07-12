@@ -106,7 +106,7 @@ export const ContentManagement: React.FC = () => {
       if (error) {
         setError(error);
       } else {
-        setCategories(data?.map(cat => cat.name) || []);
+        setCategories(data || []);
         setTotalCategories(data?.length || 0);
       }
     } catch (err) {
@@ -1213,23 +1213,6 @@ export const ContentManagement: React.FC = () => {
           onPollCreated={(poll) => {
             setPolls(prev => [poll, ...prev]);
             setShowCreatePollModal(false);
-            successToast('Poll created successfully!');
-          }}
-          userId={user.id}
-        />
-      )}
-      
-      {/* Edit Poll Modal */}
-      {showEditPollModal && selectedPoll && user && (
-        <EditPollModal
-          poll={selectedPoll}
-          onClose={() => {
-            setShowEditPollModal(false);
-            setSelectedPoll(null);
-          }}
-          onPollUpdated={(updatedPoll) => {
-            setPolls(prev => prev.map(p => p.id === updatedPoll.id ? updatedPoll : p));
-            setShowEditPollModal(false);
             successToast('Poll created successfully!');
           }}
           userId={user.id}
