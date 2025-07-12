@@ -1,10 +1,10 @@
 // Generate sitemap.xml for PollPeak
-require('dotenv').config();
-const { SitemapStream, streamToPromise } = require('sitemap');
-const { Readable } = require('stream');
-const fs = require('fs');
-const path = require('path');
-const { createClient } = require('@supabase/supabase-js');
+import 'dotenv/config';
+import { SitemapStream, streamToPromise } from 'sitemap';
+import { Readable } from 'stream';
+import fs from 'fs';
+import path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -98,7 +98,7 @@ async function generateSitemap() {
     const xml = await streamToPromise(data);
     
     // Write sitemap to file
-    const outputPath = path.join(__dirname, '../public/sitemap.xml');
+    const outputPath = path.join(process.cwd(), 'public/sitemap.xml');
     fs.writeFileSync(outputPath, xml.toString());
     
     console.log(`Sitemap generated successfully at ${outputPath}`);
