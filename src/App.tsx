@@ -27,7 +27,6 @@ import { PWAInstallPrompt } from './components/ui/PWAInstallPrompt';
 import { Toaster } from './components/ui/Toast';
 import { CookieConsentBanner } from './components/layout/CookieConsentBanner';
 import { useToast } from './hooks/useToast';
-
 // Main App content component that has access to settings context
 const AppContent: React.FC = () => {
   const { generalSettings } = useSettings();

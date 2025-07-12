@@ -1,9 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Zap, Twitter, Facebook, Instagram, Mail } from 'lucide-react';
+import { Twitter, Facebook, Instagram, Mail } from 'lucide-react';
 import { FooterAd } from '../ads/FooterAd';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { useSettings } from '../../contexts/SettingsContext';
+import { InstallPWAButton } from '../ui/InstallPWAButton';
 
 export const Footer: React.FC = () => {
   const { generalSettings } = useSettings();
@@ -50,6 +51,8 @@ export const Footer: React.FC = () => {
               <a href="#" className="text-gray-400 hover:text-primary-400 transition-colors">
                 <Mail className="h-5 w-5" />
               </a>
+              <InstallPWAButton />
+              <InstallPWAButton />
               {generalSettings.allowThemeSelection !== false && (
                 <ThemeToggle className="ml-2" />
               )}
