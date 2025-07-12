@@ -51,11 +51,12 @@ export const Footer: React.FC = () => {
               <a href="#" className="text-gray-400 hover:text-primary-400 transition-colors">
                 <Mail className="h-5 w-5" />
               </a>
-              <InstallPWAButton />
-              <InstallPWAButton />
               {generalSettings.allowThemeSelection !== false && (
                 <ThemeToggle className="ml-2" />
               )}
+            </div>
+            <div className="mt-4">
+              <InstallPWAButton />
             </div>
           </div>
 
