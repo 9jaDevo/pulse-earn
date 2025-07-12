@@ -42,16 +42,16 @@ export const Header: React.FC = () => {
               {generalSettings.logoUrl ? (
                 <img 
                   src={generalSettings.logoUrl} 
-                  alt={generalSettings.platformName || "PulseEarn"} 
+                  alt={generalSettings.platformName || "PollPeak"} 
                   className="h-10 w-auto group-hover:scale-105 transition-transform"
                 />
               ) : (
                 <>
-                  <div className="bg-gradient-to-r from-primary-500 to-secondary-500 p-2 rounded-lg group-hover:scale-105 transition-transform">
-                    <Zap className="h-6 w-6 text-white" />
+                  <div className="p-2 rounded-lg group-hover:scale-105 transition-transform">
+                    <img src="/assets/PollPeak.png" alt="PollPeak" className="h-8 w-auto" />
                   </div>
-                  <span className="text-xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
-                    {generalSettings.platformName || "PulseEarn"}
+                  <span className="text-xl font-bold text-primary-600">
+                    {generalSettings.platformName || "PollPeak"}
                   </span>
                 </>
               )}
@@ -104,7 +104,7 @@ export const Header: React.FC = () => {
                   <div className="relative">
                     <button
                       onClick={() => setShowUserMenu(!showUserMenu)}
-                      className="flex items-center space-x-2 bg-primary-600 dark:bg-primary-700 text-white px-4 py-2 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
+                      className="flex items-center space-x-2 bg-primary-500 dark:bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-600 dark:hover:bg-primary-500 transition-colors"
                     >
                       {profile.avatar_url ? (
                         <img 
@@ -160,7 +160,7 @@ export const Header: React.FC = () => {
               ) : (
                 <button
                   onClick={() => setShowAuthModal(true)}
-                  className="bg-primary-600 dark:bg-primary-700 text-white px-4 py-2 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors flex items-center space-x-2"
+                  className="bg-primary-500 dark:bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-600 dark:hover:bg-primary-500 transition-colors flex items-center space-x-2"
                 >
                   <User className="h-4 w-4" />
                   <span>Sign In</span>

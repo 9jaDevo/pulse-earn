@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Disallow admin and dashboard pages
+Disallow: /admin
+Disallow: /dashboard
+
+# Sitemap location
+Sitemap: https://pollpeak.com/sitemap.xml

@@ -1,4 +1,4 @@
-# PulseEarn Platform
+# PollPeak Platform
 
 A scalable, community-powered platform for polls, trivia, daily rewards, and monetization through ads, sponsored content, and ambassador commissions.
 
@@ -216,7 +216,7 @@ src/
 
 3. **Stripe API Key Configuration**:
    
-   PulseEarn uses Stripe for payment processing. There are two important keys to configure:
+   PollPeak uses Stripe for payment processing. There are two important keys to configure:
    
    - **Publishable Key**: Used for frontend integration with Stripe.js.
      - Can be set in `.env` file as `VITE_STRIPE_PUBLIC_KEY`

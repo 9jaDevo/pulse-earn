@@ -2,15 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Brain, Clock, Trophy, Star, Zap, Users, Target, Award } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { RewardService, type TriviaGameSummary } from '../services/rewardService';
-import { Link } from 'react-router-dom';
-import { ContentAd } from '../components/ads/ContentAd';
+import { Link, useNavigate } from 'react-router-dom';
+import { ContentAd } from '../components/ads/ContentAd'; 
 import { SidebarAd } from '../components/ads/SidebarAd';
+import { supabase } from '../lib/supabase';
 import { useToast } from '../hooks/useToast';
-import { useCountdown, getNextMidnightUTC } from '../hooks/useCountdown';
+import { useCountdown, getNextMidnightUTC } from '../hooks/useCountdown'; 
 
 export const TriviaPage: React.FC = () => {
   const { user, profile } = useAuth();
   const { errorToast } = useToast();
+  const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
   const [categories, setCategories] = useState<string[]>([]);
@@ -24,24 +26,33 @@ export const TriviaPage: React.FC = () => {
     pointsEarned: 0,
     rank: 0
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [gamesPerPage] = useState(9); // Number of games to display per page
+  const [totalTriviaGames, setTotalTriviaGames] = useState(0);
   
   // Daily challenge state
   const [dailyChallengeGame, setDailyChallengeGame] = useState<TriviaGameSummary | null>(null);
   const [dailyChallengeLoading, setDailyChallengeLoading] = useState(true);
   
   // Countdown to next daily challenge
-  const nextMidnight = getNextMidnightUTC();
+  const nextMidnight = React.useMemo(() => getNextMidnightUTC(), []);
   const countdown = useCountdown(nextMidnight);
 
   useEffect(() => {
     fetchTriviaData();
   }, []);
+  
+  useEffect(() => {
+    if (user?.id) {
+      fetchUserStats();
+    }
+  }, [user]);
 
   useEffect(() => {
     if (categories.length > 0 || difficulties.length > 0) {
       fetchTriviaGames();
     }
-  }, [selectedCategory, selectedDifficulty, categories, difficulties]);
+  }, [selectedCategory, selectedDifficulty, categories, difficulties, currentPage]);
 
   const fetchTriviaData = async () => {
     setLoading(true);
@@ -70,14 +81,6 @@ export const TriviaPage: React.FC = () => {
         d.charAt(0).toUpperCase() + d.slice(1)
       )]);
 
-      // Set mock stats (in a real implementation, these would come from user data)
-      setStats({
-        gamesPlayed: 1847,
-        bestScore: 98,
-        pointsEarned: profile?.points || 0,
-        rank: 247
-      });
-      
       // Fetch daily challenge
       await fetchDailyChallenge();
 
@@ -85,6 +88,31 @@ export const TriviaPage: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Failed to load trivia data');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const fetchUserStats = async () => {
+    if (!user?.id) return;
+    
+    try {
+      // Fetch user's trivia stats
+      const { data, error } = await RewardService.getUserTriviaStats(user.id);
+      
+      if (error) {
+        console.error('Error fetching user trivia stats:', error);
+        return;
+      }
+      
+      if (data) {
+        setStats({
+          gamesPlayed: data.totalGamesPlayed,
+          bestScore: data.bestScore,
+          pointsEarned: profile?.points || 0,
+          rank: 247 // This could be fetched from a leaderboard service in a real implementation
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching user stats:', err);
     }
   };
   
@@ -131,10 +159,15 @@ export const TriviaPage: React.FC = () => {
 
   const fetchTriviaGames = async () => {
     try {
+      const offset = (currentPage - 1) * gamesPerPage;
+      
       const { data, error: gameError } = await RewardService.getTriviaGameSummaries({
         category: selectedCategory === 'all' ? undefined : selectedCategory,
         difficulty: selectedDifficulty === 'all' ? undefined : selectedDifficulty.toLowerCase(),
-        country: profile?.country
+        country: profile?.country,
+        limit: gamesPerPage,
+        offset: offset,
+        userId: user?.id
       });
 
       if (gameError) {
@@ -143,6 +176,14 @@ export const TriviaPage: React.FC = () => {
       }
 
       setTriviaGames(data || []);
+      
+      // Get total count for pagination
+      const { count } = await supabase
+        .from('trivia_games')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true);
+      
+      setTotalTriviaGames(count || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load trivia games');
     }
@@ -169,6 +210,20 @@ export const TriviaPage: React.FC = () => {
     };
     
     return `${difficultyAdjectives[difficulty as keyof typeof difficultyAdjectives] || 'Ultimate'} ${category} Challenge`;
+  };
+
+  const handleGameClick = (gameId: string, hasPlayed?: boolean) => {
+    if (!user) {
+      errorToast('Please sign in to play trivia games');
+      return;
+    }
+    
+    if (hasPlayed) {
+      errorToast('You have already completed this game and earned points');
+      return;
+    }
+    
+    navigate(`/trivia/game/${gameId}`);
   };
 
   const generateGameDescription = (category: string, difficulty: string): string => {
@@ -323,7 +378,15 @@ export const TriviaPage: React.FC = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {triviaGames.map((game) => (
-            <div key={game.id} className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 group hover:-translate-y-1">
+            <div 
+              key={game.id} 
+              className={`bg-white rounded-xl p-6 shadow-sm border border-gray-200 transition-all group ${
+                game.hasPlayed 
+                  ? 'opacity-75' 
+                  : 'hover:shadow-lg hover:-translate-y-1 cursor-pointer'
+              }`}
+              onClick={() => game.hasPlayed ? null : handleGameClick(game.id)}
+            >
               {/* Game Header */}
               <div className="flex justify-between items-start mb-4">
                 <div className="flex-1">
@@ -335,7 +398,17 @@ export const TriviaPage: React.FC = () => {
                       {game.difficulty.charAt(0).toUpperCase() + game.difficulty.slice(1)}
                     </span>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-primary-600 transition-colors">
+                  <h3 
+                    className={`text-lg font-semibold text-gray-900 mb-2 ${
+                      game.hasPlayed ? '' : 'group-hover:text-primary-600'
+                    } transition-colors`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!game.hasPlayed) {
+                        handleGameClick(game.id);
+                      }
+                    }}
+                  >
                     {generateGameTitle(game.category, game.difficulty)}
                   </h3>
                   <p className="text-gray-600 text-sm mb-4 line-clamp-2">
@@ -371,12 +444,19 @@ export const TriviaPage: React.FC = () => {
                   <span className="text-accent-600 font-semibold">+{game.pointsReward} points</span>
                 </div>
                 {user ? (
-                  <Link 
-                    to={`/trivia/game/${game.id}`}
-                    className="bg-gradient-to-r from-primary-600 to-secondary-600 text-white px-6 py-2 rounded-lg hover:from-primary-700 hover:to-secondary-700 transition-all transform hover:scale-105 font-medium inline-flex items-center justify-center"
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleGameClick(game.id, game.hasPlayed);
+                    }}
+                    className={`bg-gradient-to-r ${
+                      game.hasPlayed 
+                        ? 'from-gray-400 to-gray-500 cursor-not-allowed' 
+                        : 'from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 transform hover:scale-105'
+                    } text-white px-6 py-2 rounded-lg transition-all font-medium inline-flex items-center justify-center`}
                   >
-                    Play Now
-                  </Link>
+                    {game.hasPlayed ? 'Completed' : 'Play Now'}
+                  </button>
                 ) : (
                   <button 
                     onClick={() => errorToast('Please sign in to play trivia games')}
@@ -462,6 +542,31 @@ export const TriviaPage: React.FC = () => {
           )}
         </div>
       </div>
+      
+      {/* Pagination */}
+      {triviaGames.length > 0 && (
+        <div className="flex justify-center mt-8">
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <span className="px-4 py-2 text-gray-700">
+              Page {currentPage} of {Math.ceil(totalTriviaGames / gamesPerPage)}
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => prev + 1)}
+              disabled={currentPage >= Math.ceil(totalTriviaGames / gamesPerPage)}
+              className="px-4 py-2 rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

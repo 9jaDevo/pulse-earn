@@ -188,10 +188,11 @@ export class RewardService {
       country?: string;
       limit?: number;
       offset?: number;
+      userId?: string;
     } = {}
   ): Promise<ServiceResponse<TriviaGameSummary[]>> {
     try {
-      const { category, difficulty, country, limit = 10, offset = 0 } = options;
+      const { category, difficulty, country, limit = 10, offset = 0, userId } = options;
 
       // First try to fetch from trivia_games table
       let query = supabase.from('trivia_games')
@@ -214,7 +215,7 @@ export class RewardService {
       }
 
       // Convert to TriviaGameSummary format
-      const summaries: TriviaGameSummary[] = (data || []).map(game => ({
+      let summaries: TriviaGameSummary[] = (data || []).map(game => ({
         id: game.id,
         title: game.title,
         description: game.description,
@@ -236,6 +237,34 @@ export class RewardService {
         const diffOrder = { 'easy': 1, 'medium': 2, 'hard': 3 };
         return diffOrder[a.difficulty] - diffOrder[b.difficulty];
       });
+
+      // If userId is provided, check which games the user has already played
+      if (userId && summaries.length > 0) {
+        const gameIds = summaries.map(game => game.id);
+        
+        // Query daily_reward_history to find completed games with points earned
+        const { data: playedGames } = await supabase
+          .from('daily_reward_history')
+          .select('reward_data')
+          .eq('user_id', userId)
+          .eq('reward_type', 'trivia')
+          .gt('points_earned', 0);
+        
+        if (playedGames && playedGames.length > 0) {
+          // Create a set of played game IDs for faster lookup
+          const playedGameIds = new Set(
+            playedGames
+              .filter(entry => entry.reward_data && entry.reward_data.game_id)
+              .map(entry => entry.reward_data.game_id)
+          );
+          
+          // Mark games as played
+          summaries = summaries.map(game => ({
+            ...game,
+            hasPlayed: playedGameIds.has(game.id)
+          }));
+        }
+      }
 
       return { data: summaries, error: null };
     } catch (error) {
@@ -309,6 +338,66 @@ export class RewardService {
   }
 
   /**
+   * Get user's trivia statistics
+   */
+  static async getUserTriviaStats(userId: string): Promise<ServiceResponse<{
+    totalGamesPlayed: number;
+    bestScore: number;
+  }>> {
+    try {
+      // Get total games played
+      const { count: totalGamesPlayed, error: countError } = await supabase
+        .from('daily_reward_history')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('reward_type', 'trivia')
+        .gt('points_earned', 0);
+      
+      if (countError) {
+        return { data: null, error: countError.message };
+      }
+      
+      // Get best score
+      const { data: scoreData, error: scoreError } = await supabase
+        .from('daily_reward_history')
+        .select('reward_data')
+        .eq('user_id', userId)
+        .eq('reward_type', 'trivia')
+        .order('created_at', { ascending: false });
+      
+      if (scoreError) {
+        return { data: null, error: scoreError.message };
+      }
+      
+      let bestScore = 0;
+      if (scoreData && scoreData.length > 0) {
+        // Find the maximum score in reward_data
+        scoreData.forEach(entry => {
+          if (entry.reward_data && entry.reward_data.score) {
+            const score = Number(entry.reward_data.score);
+            if (!isNaN(score) && score > bestScore) {
+              bestScore = score;
+            }
+          }
+        });
+      }
+      
+      return {
+        data: {
+          totalGamesPlayed: totalGamesPlayed || 0,
+          bestScore
+        },
+        error: null
+      };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Failed to get user trivia stats'
+      };
+    }
+  }
+
+  /**
    * Submit a completed trivia game
    */
   static async submitTriviaGame(
@@ -323,6 +412,35 @@ export class RewardService {
     message: string;
   }>> {
     try {
+      // Check if user has already completed this game and earned points
+      const { data: existingCompletions, error: checkError } = await supabase
+        .from('daily_reward_history')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('reward_type', 'trivia')
+        .gt('points_earned', 0)
+        .filter('reward_data->game_id', 'eq', gameId);
+      
+      if (checkError) {
+        return { data: null, error: checkError.message };
+      }
+      
+      // If user has already completed this game and earned points, don't award more points
+      if (existingCompletions && existingCompletions.length > 0) {
+        // Calculate score as percentage
+        const score = Math.round((correctAnswers / answers.length) * 100);
+        
+        return { 
+          data: {
+            success: true,
+            pointsEarned: 0,
+            score,
+            message: `You scored ${score}%. You've already earned points for this game!`
+          }, 
+          error: null 
+        };
+      }
+
       // Get the game details
       const { data: game, error: gameError } = await this.fetchTriviaGameById(gameId);
       
