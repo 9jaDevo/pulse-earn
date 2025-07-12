@@ -24,6 +24,7 @@ import { useToast } from '../../hooks/useToast';
 import { useAuth } from '../../contexts/AuthContext';
 import { GeneratePollsModal } from './GeneratePollsModal';
 import { supabase } from '../../lib/supabase';
+import { EditPollModal } from '../polls/EditPollModal';
 import type { PollCategory, TriviaGame, TriviaGameSummary, TriviaQuestion, Badge } from '../../types/api';
 import { AddEditTriviaGameModal } from './AddEditTriviaGameModal';
 import { AddEditTriviaQuestionModal } from './AddEditTriviaQuestionModal';
@@ -55,6 +56,8 @@ export const ContentManagement: React.FC = () => {
   const [totalPolls, setTotalPolls] = useState(0);
   const [pollsPerPage] = useState(10);
   const [showCreatePollModal, setShowCreatePollModal] = useState(false);
+  const [showEditPollModal, setShowEditPollModal] = useState(false);
+  const [selectedPoll, setSelectedPoll] = useState<any>(null);
 
   // Trivia state
   const [triviaGames, setTriviaGames] = useState<TriviaGameSummary[]>([]);
@@ -287,6 +290,11 @@ export const ContentManagement: React.FC = () => {
       errorToast('Failed to update category');
       console.error(err);
     }
+  };
+
+  const handleEditPoll = (poll: any) => {
+    setSelectedPoll(poll);
+    setShowEditPollModal(true);
   };
 
   const handleDeletePoll = async (pollId: string) => {
@@ -714,7 +722,9 @@ export const ContentManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        <button className="text-primary-600 hover:text-primary-900">
+                        <button 
+                          onClick={() => handleEditPoll(poll)}
+                          className="text-primary-600 hover:text-primary-900">
                           <Edit className="h-4 w-4" />
                         </button>
                         <button 
@@ -1203,7 +1213,42 @@ export const ContentManagement: React.FC = () => {
           onPollCreated={(poll) => {
             setPolls(prev => [poll, ...prev]);
             setShowCreatePollModal(false);
-            successToast('Poll created successfully');
+            successToast('Poll created successfully!');
+          }}
+          userId={user.id}
+        />
+      )}
+      
+      {/* Edit Poll Modal */}
+      {showEditPollModal && selectedPoll && user && (
+        <EditPollModal
+          poll={selectedPoll}
+          onClose={() => {
+            setShowEditPollModal(false);
+            setSelectedPoll(null);
+          }}
+          onPollUpdated={(updatedPoll) => {
+            setPolls(prev => prev.map(p => p.id === updatedPoll.id ? updatedPoll : p));
+            setShowEditPollModal(false);
+            successToast('Poll created successfully!');
+          }}
+          userId={user.id}
+        />
+      )}
+      
+      {/* Edit Poll Modal */}
+      {showEditPollModal && selectedPoll && user && (
+        <EditPollModal
+          poll={selectedPoll}
+          onClose={() => {
+            setShowEditPollModal(false);
+            setSelectedPoll(null);
+          }}
+          onPollUpdated={(updatedPoll) => {
+            setPolls(prev => prev.map(p => p.id === updatedPoll.id ? updatedPoll : p));
+            setShowEditPollModal(false);
+            setSelectedPoll(null);
+            successToast('Poll updated successfully!');
           }}
           userId={user.id}
         />
