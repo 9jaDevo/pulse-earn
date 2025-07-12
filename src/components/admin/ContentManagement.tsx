@@ -106,7 +106,7 @@ export const ContentManagement: React.FC = () => {
       if (error) {
         setError(error);
       } else {
-        setCategories(data || []);
+        setCategories(data?.map(cat => cat.name) || []);
         setTotalCategories(data?.length || 0);
       }
     } catch (err) {
