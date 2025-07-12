@@ -418,7 +418,7 @@ export class RewardService {
         .eq('user_id', userId)
         .eq('reward_type', 'trivia')
         .gt('points_earned', 0)
-        .filter('reward_data->game_id', 'eq', gameId);
+        .filter('reward_data->>game_id', 'eq', gameId);
       
       if (checkError) {
         return { data: null, error: checkError.message };
