@@ -1,6 +1,6 @@
-# PulseEarn API Documentation
+# PollPeak API Documentation
 
-This directory contains the Postman collection and environment files for the PulseEarn API. These files can be imported into Postman to explore and test the API endpoints.
+This directory contains the Postman collection and environment files for the PollPeak API. These files can be imported into Postman to explore and test the API endpoints.
 
 ## Files
 
@@ -20,7 +20,7 @@ This directory contains the Postman collection and environment files for the Pul
 ### Setting Up Environment Variables
 
 1. In Postman, click on the environment dropdown in the top right corner
-2. Select "PulseEarn API Environment"
+2. Select "PollPeak API Environment"
 3. Update the following variables:
    - `SUPABASE_URL`: Your Supabase project URL (e.g., https://abcdefg.supabase.co)
    - `SUPABASE_ANON_KEY`: Your Supabase public 'anon' key

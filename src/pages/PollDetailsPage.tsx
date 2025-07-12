@@ -202,7 +202,7 @@ export const PollDetailsPage: React.FC = () => {
   const handleShare = async () => {
     const shareUrl = `${window.location.origin}/polls/${poll?.slug}`;
     const shareTitle = poll?.title || 'Check out this poll';
-    const shareText = `Vote on "${shareTitle}" on PulseEarn! ${poll?.description || ''}`;
+    const shareText = `Vote on "${shareTitle}" on PollPeak! ${poll?.description || ''}`;
     
     if (navigator.share) {
       try {

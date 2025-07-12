@@ -544,7 +544,7 @@ export const AmbassadorPage: React.FC = () => {
           <p className="text-gray-600 max-w-2xl mx-auto">
             {ambassadorData.ambassador ? 
               `Welcome back! You're representing ${ambassadorData.ambassador.country} with ${ambassadorData.stats?.totalReferrals || 0} referrals.` :
-              'Earn real money by referring friends to PulseEarn. The more you share, the more you earn!'
+              'Earn real money by referring friends to PollPeak. The more you share, the more you earn!'
             }
           </p>
           {ambassadorData.stats?.tierName && (

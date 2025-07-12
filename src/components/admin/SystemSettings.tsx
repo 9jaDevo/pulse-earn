@@ -31,7 +31,7 @@ export const SystemSettings: React.FC = () => {
   
   // General settings
   const [generalSettings, setGeneralSettings] = useState({
-    platformName: 'PulseEarn',
+    platformName: 'PollPeak',
     platformDescription: 'Community-powered platform for polls, trivia, and rewards',
     defaultLanguage: 'en',
     defaultTheme: 'system',

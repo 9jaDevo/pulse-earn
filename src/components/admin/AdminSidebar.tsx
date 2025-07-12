@@ -109,7 +109,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               <Zap className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">PulseEarn</h1>
+              <h1 className="text-xl font-bold text-gray-900">PollPeak</h1>
               <p className="text-sm text-gray-500">Admin Panel</p>
             </div>
           </div>

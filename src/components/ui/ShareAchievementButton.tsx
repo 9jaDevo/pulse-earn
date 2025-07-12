@@ -25,7 +25,7 @@ export const ShareAchievementButton: React.FC<ShareAchievementButtonProps> = ({
   const { successToast, errorToast } = useToast();
 
   const generateShareText = (): string => {
-    return `I just scored ${score}% on "${title}" and earned ${pointsEarned} points on PulseEarn! Come earn with me! 🎮 #PulseEarn #Trivia`;
+    return `I just scored ${score}% on "${title}" and earned ${pointsEarned} points on PollPeak! Come earn with me! 🎮 #PollPeak #Trivia`;
   };
 
   const handleShare = async () => {
@@ -35,7 +35,7 @@ export const ShareAchievementButton: React.FC<ShareAchievementButtonProps> = ({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `My PulseEarn Achievement: ${score}% on ${title}`,
+          title: `My PollPeak Achievement: ${score}% on ${title}`,
           text: shareText,
           url: shareUrl
         });

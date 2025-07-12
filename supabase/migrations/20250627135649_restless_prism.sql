@@ -94,4 +94,4 @@ VALUES
   ('Bank Transfer', 'Direct bank transfer to your account', 'bank_transfer', 20000, '$50', 'USD', '🏦', 'You will be contacted to provide your bank details securely', true, null),
   ('Gaming Mouse', 'High-performance gaming mouse with RGB lighting', 'physical_item', 15000, 'Gaming Mouse', null, '🖱️', 'Please provide your shipping address when prompted', true, 25),
   ('Wireless Earbuds', 'Premium wireless earbuds with noise cancellation', 'physical_item', 18000, 'Wireless Earbuds', null, '🎧', 'Please provide your shipping address when prompted', true, 15),
-  ('Custom T-Shirt', 'PulseEarn branded t-shirt', 'physical_item', 8000, 'T-Shirt', null, '👕', 'You will be contacted to confirm size and shipping details', true, 50);
+  ('Custom T-Shirt', 'PollPeak branded t-shirt', 'physical_item', 8000, 'T-Shirt', null, '👕', 'You will be contacted to confirm size and shipping details', true, 50);

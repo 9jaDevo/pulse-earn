@@ -71,7 +71,7 @@ export const PrivacyPolicyPage: React.FC = () => {
               Introduction
             </h2>
             <p className="text-gray-700 leading-relaxed">
-              PulseEarn ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our community platform for polls, trivia, and rewards. Please read this privacy policy carefully. If you do not agree with the terms of this privacy policy, please do not access the platform.
+              PollPeak ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our community platform for polls, trivia, and rewards. Please read this privacy policy carefully. If you do not agree with the terms of this privacy policy, please do not access the platform.
             </p>
           </section>
 
@@ -284,7 +284,7 @@ export const PrivacyPolicyPage: React.FC = () => {
             </p>
             <div className="space-y-2 text-gray-700">
               <p><strong>Email:</strong> privacy@pulselearn.com</p>
-              <p><strong>Address:</strong> PulseEarn Privacy Team, 123 Community Street, Digital City, DC 12345</p>
+              <p><strong>Address:</strong> PollPeak Privacy Team, 123 Community Street, Digital City, DC 12345</p>
               <p><strong>Response Time:</strong> We aim to respond to all privacy inquiries within 48 hours.</p>
             </div>
           </section>

@@ -244,7 +244,7 @@ export const DashboardPage: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-          <p className="text-gray-600">Track your progress and manage your PulseEarn journey</p>
+          <p className="text-gray-600">Track your progress and manage your PollPeak journey</p>
         </div>
 
         {/* Tabs */}

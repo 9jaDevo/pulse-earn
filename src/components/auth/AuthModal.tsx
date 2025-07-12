@@ -101,7 +101,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
             <User className="h-8 w-8 text-white" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            {mode === 'signin' ? 'Welcome Back!' : 'Join PulseEarn'}
+            {mode === 'signin' ? 'Welcome Back!' : 'Join PollPeak'}
           </h2>
           <p className="text-gray-600">
             {mode === 'signin' 

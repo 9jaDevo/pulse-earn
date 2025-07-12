@@ -1,9 +1,9 @@
 {
   "info": {
     "_postman_id": "your-collection-id",
-    "name": "PulseEarn API",
+    "name": "PollPeak API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Postman Collection for the PulseEarn mobile application API endpoints. This collection provides a comprehensive overview of the RESTful and RPC endpoints exposed by the Supabase backend, along with authentication and data management operations. \n\n**Setup:**\n1.  **Import this JSON** into Postman.\n2.  **Set Collection Variables**: Update `SUPABASE_URL` and `SUPABASE_ANON_KEY` with your Supabase project details. You can find these in your Supabase project settings under 'API'.\n3.  **Authentication**: Use the 'Auth' folder requests to sign up or sign in. The 'Sign In' request has a 'Tests' script that automatically sets the `AUTH_TOKEN` and `USER_ID` collection variables upon successful login. This token will then be used for all subsequent authenticated requests.\n\n**Headers:**\n*   `apikey`: `{{SUPABASE_ANON_KEY}}` (required for all Supabase API calls)\n*   `Authorization`: `Bearer {{AUTH_TOKEN}}` (required for authenticated endpoints)\n*   `Content-Type`: `application/json` (for requests with a body)\n*   `Prefer`: `return=representation` (for POST/PATCH requests to get the created/updated record back)\n\n**Note on RLS (Row Level Security):**\nSupabase enforces Row Level Security. Ensure your Supabase RLS policies are correctly configured for the roles and data access patterns required by your mobile application. Some operations might require 'admin' or 'moderator' roles, which are typically handled by backend functions or secure admin panels, not directly by the mobile app's public API."
+    "description": "Postman Collection for the PollPeak mobile application API endpoints. This collection provides a comprehensive overview of the RESTful and RPC endpoints exposed by the Supabase backend, along with authentication and data management operations. \n\n**Setup:**\n1.  **Import this JSON** into Postman.\n2.  **Set Collection Variables**: Update `SUPABASE_URL` and `SUPABASE_ANON_KEY` with your Supabase project details. You can find these in your Supabase project settings under 'API'.\n3.  **Authentication**: Use the 'Auth' folder requests to sign up or sign in. The 'Sign In' request has a 'Tests' script that automatically sets the `AUTH_TOKEN` and `USER_ID` collection variables upon successful login. This token will then be used for all subsequent authenticated requests.\n\n**Headers:**\n*   `apikey`: `{{SUPABASE_ANON_KEY}}` (required for all Supabase API calls)\n*   `Authorization`: `Bearer {{AUTH_TOKEN}}` (required for authenticated endpoints)\n*   `Content-Type`: `application/json` (for requests with a body)\n*   `Prefer`: `return=representation` (for POST/PATCH requests to get the created/updated record back)\n\n**Note on RLS (Row Level Security):**\nSupabase enforces Row Level Security. Ensure your Supabase RLS policies are correctly configured for the roles and data access patterns required by your mobile application. Some operations might require 'admin' or 'moderator' roles, which are typically handled by backend functions or secure admin panels, not directly by the mobile app's public API."
   },
   "auth": {
     "type": "bearer",
@@ -2701,7 +2701,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"settings\": {\n        \"platformName\": \"PulseEarn Pro\",\n        \"defaultTheme\": \"dark\"\n    }\n}"
+              "raw": "{\n    \"settings\": {\n        \"platformName\": \"PollPeak Pro\",\n        \"defaultTheme\": \"dark\"\n    }\n}"
             },
             "url": {
               "raw": "{{SUPABASE_URL}}/rest/v1/app_settings?category=eq.general",

@@ -68,7 +68,7 @@ CREATE TRIGGER update_app_settings_updated_at
 -- Insert default settings
 INSERT INTO app_settings (category, settings) VALUES
   ('general', '{
-    "platformName": "PulseEarn",
+    "platformName": "PollPeak",
     "platformDescription": "Community-powered platform for polls, trivia, and rewards",
     "defaultLanguage": "en"
   }'),

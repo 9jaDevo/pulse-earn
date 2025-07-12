@@ -55,7 +55,7 @@ export const TermsOfServicePage: React.FC = () => {
             Terms of <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">Service</span>
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Please read these terms carefully before using our platform. By using PulseEarn, you agree to these terms.
+            Please read these terms carefully before using our platform. By using PollPeak, you agree to these terms.
           </p>
           <p className="text-sm text-gray-500 mt-4">
             Last updated: January 18, 2025
@@ -71,7 +71,7 @@ export const TermsOfServicePage: React.FC = () => {
               Acceptance of Terms
             </h2>
             <p className="text-gray-700 leading-relaxed">
-              Welcome to PulseEarn! These Terms of Service ("Terms") govern your use of the PulseEarn platform, website, and services (collectively, the "Service") operated by PulseEarn ("we," "us," or "our"). By accessing or using our Service, you agree to be bound by these Terms. If you disagree with any part of these terms, then you may not access the Service.
+              Welcome to PollPeak! These Terms of Service ("Terms") govern your use of the PollPeak platform, website, and services (collectively, the "Service") operated by PollPeak ("we," "us," or "our"). By accessing or using our Service, you agree to be bound by these Terms. If you disagree with any part of these terms, then you may not access the Service.
             </p>
           </section>
 
@@ -82,7 +82,7 @@ export const TermsOfServicePage: React.FC = () => {
               Description of Service
             </h2>
             <p className="text-gray-700 mb-4">
-              PulseEarn is a community-powered platform that allows users to:
+              PollPeak is a community-powered platform that allows users to:
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-primary-50 p-4 rounded-lg">
@@ -240,7 +240,7 @@ export const TermsOfServicePage: React.FC = () => {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Our Content</h3>
                 <p className="text-gray-700">
-                  The Service and its original content, features, and functionality are owned by PulseEarn and are protected by international copyright, trademark, patent, trade secret, and other intellectual property laws.
+                  The Service and its original content, features, and functionality are owned by PollPeak and are protected by international copyright, trademark, patent, trade secret, and other intellectual property laws.
                 </p>
               </div>
               
@@ -278,7 +278,7 @@ export const TermsOfServicePage: React.FC = () => {
               <div className="bg-error-50 p-4 rounded-lg border border-error-200">
                 <h4 className="font-semibold text-error-900 mb-2">Limitation of Liability</h4>
                 <p className="text-error-800 text-sm">
-                  To the maximum extent permitted by law, PulseEarn shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data, or use.
+                  To the maximum extent permitted by law, PollPeak shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data, or use.
                 </p>
               </div>
             </div>
@@ -288,7 +288,7 @@ export const TermsOfServicePage: React.FC = () => {
           <section>
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Indemnification</h2>
             <p className="text-gray-700">
-              You agree to defend, indemnify, and hold harmless PulseEarn and its officers, directors, employees, and agents from any claims, damages, obligations, losses, liabilities, costs, or debt arising from your use of the Service or violation of these Terms.
+              You agree to defend, indemnify, and hold harmless PollPeak and its officers, directors, employees, and agents from any claims, damages, obligations, losses, liabilities, costs, or debt arising from your use of the Service or violation of these Terms.
             </p>
           </section>
 
@@ -339,7 +339,7 @@ export const TermsOfServicePage: React.FC = () => {
             </p>
             <div className="space-y-2 text-gray-700">
               <p><strong>Email:</strong> legal@pulselearn.com</p>
-              <p><strong>Address:</strong> PulseEarn Legal Department, 123 Community Street, Digital City, DC 12345</p>
+              <p><strong>Address:</strong> PollPeak Legal Department, 123 Community Street, Digital City, DC 12345</p>
               <p><strong>Phone:</strong> +1 (555) 123-4567</p>
             </div>
           </section>
