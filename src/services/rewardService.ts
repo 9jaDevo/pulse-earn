@@ -248,8 +248,8 @@ export class RewardService {
           .select('reward_data')
           .eq('user_id', userId)
           .eq('reward_type', 'trivia')
-          .gt('points_earned', 0)
-          .filter('reward_data->>game_id', 'eq', gameId);
+          .gt('points_earned', 0);
+        
         if (playedGames && playedGames.length > 0) {
           // Create a set of played game IDs for faster lookup
           const playedGameIds = new Set(
