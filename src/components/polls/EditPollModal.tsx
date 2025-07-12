@@ -41,7 +41,7 @@ export const EditPollModal: React.FC<EditPollModalProps> = ({
     setIsLoadingCategories(true);
     const { data, error } = await PollService.getAllPollCategories();
     if (!error && data) {
-      setCategories(data);
+      setCategories(data.map(cat => cat.name));
     }
     setIsLoadingCategories(false);
   };
