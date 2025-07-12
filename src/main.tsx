@@ -14,8 +14,8 @@ if (isWebView()) {
   });
 }
 
-// Register service worker for PWA functionality
-if ('serviceWorker' in navigator) {
+// Register service worker for PWA functionality (only in supported environments)
+if ('serviceWorker' in navigator && !window.location.hostname.includes('webcontainer')) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then(registration => {
@@ -25,6 +25,8 @@ if ('serviceWorker' in navigator) {
         console.error('ServiceWorker registration failed: ', error);
       });
   });
+} else if (window.location.hostname.includes('webcontainer')) {
+  console.info('Service Workers are not supported in this environment (WebContainer/StackBlitz)');
 }
 
 createRoot(document.getElementById('root')!).render(
