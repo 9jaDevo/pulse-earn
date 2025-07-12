@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   FileText, 
   BarChart3, 
-  Brain, 
+  Brain,
+  Cpu,
   Plus, 
   Search, 
   Filter,
@@ -21,6 +22,7 @@ import { RewardService } from '../../services/rewardService';
 import { BadgeService } from '../../services/badgeService';
 import { useToast } from '../../hooks/useToast';
 import { useAuth } from '../../contexts/AuthContext';
+import { GeneratePollsModal } from './GeneratePollsModal';
 import { supabase } from '../../lib/supabase';
 import type { PollCategory, TriviaGame, TriviaGameSummary, TriviaQuestion, Badge } from '../../types/api';
 import { AddEditTriviaGameModal } from './AddEditTriviaGameModal';
@@ -61,6 +63,7 @@ export const ContentManagement: React.FC = () => {
   const [showTriviaGameModal, setShowTriviaGameModal] = useState(false);
   const [showTriviaQuestionModal, setShowTriviaQuestionModal] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<TriviaQuestion | null>(null);
+  const [showGeneratePollsModal, setShowGeneratePollsModal] = useState(false);
   const [triviaPage, setTriviaPage] = useState(1);
   const [totalTriviaGames, setTotalTriviaGames] = useState(0);
   const [triviaPerPage] = useState(10);
@@ -625,13 +628,22 @@ export const ContentManagement: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-gray-900">Poll Management</h2>
-        <button 
-          onClick={() => setShowCreatePollModal(true)}
-          className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors flex items-center space-x-2"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Create Poll</span>
-        </button>
+        <div className="flex space-x-2">
+          <button 
+            onClick={() => setShowGeneratePollsModal(true)}
+            className="bg-secondary-600 text-white px-4 py-2 rounded-lg hover:bg-secondary-700 transition-colors flex items-center space-x-2"
+          >
+            <Cpu className="h-4 w-4" />
+            <span>Generate with AI</span>
+          </button>
+          <button 
+            onClick={() => setShowCreatePollModal(true)}
+            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors flex items-center space-x-2"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Create Poll</span>
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -1246,6 +1258,15 @@ export const ContentManagement: React.FC = () => {
             setSelectedBadge(null);
           }}
           badge={selectedBadge}
+        />
+      )}
+      
+      {/* Generate Polls Modal */}
+      {showGeneratePollsModal && (
+        <GeneratePollsModal
+          isOpen={showGeneratePollsModal}
+          onClose={() => setShowGeneratePollsModal(false)}
+          onPollsGenerated={fetchPolls}
         />
       )}
     </div>
