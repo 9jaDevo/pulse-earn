@@ -72,16 +72,21 @@ export const AdSenseAd: React.FC<AdSenseAdProps> = ({
       };
       
       script.onerror = (error) => {
-        console.error('Error loading AdSense script. This may be due to:', {
-          error,
-          clientId: adsenseClientId,
-          possibleCauses: [
-            'Invalid AdSense client ID',
-            'AdSense account not approved',
-            'Ad blockers preventing script load',
-            'Network connectivity issues'
-          ]
-        });
+        // Only log AdSense errors if we have a valid client ID (not placeholder)
+        if (adsenseClientId && !adsenseClientId.includes('xxxxxxxxxxxxxxxxx')) {
+          console.error('Error loading AdSense script. This may be due to:', {
+            error,
+            clientId: adsenseClientId,
+            possibleCauses: [
+              'Invalid AdSense client ID',
+              'AdSense account not approved',
+              'Ad blockers preventing script load',
+              'Network connectivity issues'
+            ]
+          });
+        } else {
+          console.info('AdSense script not loaded - placeholder client ID detected. Update VITE_ADSENSE_CLIENT_ID in .env with your actual AdSense publisher ID.');
+        }
       };
       
       document.head.appendChild(script);
