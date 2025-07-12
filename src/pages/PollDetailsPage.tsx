@@ -178,8 +178,10 @@ export const PollDetailsPage: React.FC = () => {
       if (result.data) {
         successToast(`Vote recorded! You earned ${result.data.pointsEarned || 50} points.`);
         
-        // Note: We don't need to manually update the poll state here anymore
-        // The real-time subscription will handle updating the poll data
+        // Immediately update the poll state with the returned updated poll data
+        if (result.data.poll) {
+          setPoll(result.data.poll);
+        }
       }
     } catch (err) {
       errorToast('Failed to submit your vote. Please try again.');
