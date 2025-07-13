@@ -433,6 +433,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
           poll_id: selectedPollId,
           sponsor_id: sponsorId,
           budget_amount: budgetInUSD,
+          cost_per_vote: costPerVoteInUSD,
           target_votes: formData.targetVotes,
           start_date: formData.startDate || undefined,
           end_date: formData.endDate || undefined,
