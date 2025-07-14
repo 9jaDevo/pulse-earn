@@ -22,6 +22,16 @@ import { LeaderboardPage } from './pages/LeaderboardPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfServicePage } from './pages/TermsOfServicePage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
+// New pages for footer links
+import { CookiePolicyPage } from './pages/CookiePolicyPage';
+import { GdprCompliancePage } from './pages/GdprCompliancePage';
+import { DataProtectionPage } from './pages/DataProtectionPage';
+import { HelpCenterPage } from './pages/HelpCenterPage';
+import { CommunityGuidelinesPage } from './pages/CommunityGuidelinesPage';
+import { ContactPage } from './pages/ContactPage';
+import { ReportIssuePage } from './pages/ReportIssuePage';
+import { BugBountyPage } from './pages/BugBountyPage';
+import { AccessibilityPage } from './pages/AccessibilityPage';
 import { useScrollToTop } from './hooks/useScrollToTop';
 import { useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/Toast';
@@ -118,6 +128,16 @@ const AppContent: React.FC = () => {
                         </ProtectedRoute>
                       } 
                     />
+                    {/* New routes for footer links */}
+                    <Route path="/cookie-policy" element={<CookiePolicyPage />} />
+                    <Route path="/gdpr-compliance" element={<GdprCompliancePage />} />
+                    <Route path="/data-protection" element={<DataProtectionPage />} />
+                    <Route path="/help-center" element={<HelpCenterPage />} />
+                    <Route path="/community-guidelines" element={<CommunityGuidelinesPage />} />
+                    <Route path="/contact" element={<ContactPage />} />
+                    <Route path="/report-issue" element={<ReportIssuePage />} />
+                    <Route path="/bug-bounty" element={<BugBountyPage />} />
+                    <Route path="/accessibility" element={<AccessibilityPage />} />
                   </Routes>
                 </main>
                 <Footer />

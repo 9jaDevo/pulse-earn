@@ -92,18 +92,60 @@ export const Footer: React.FC = () => {
                   Terms of Service
                 </Link>
               </li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">GDPR Compliance</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Data Protection</a></li>
+              <li>
+                <Link 
+                  to="/gdpr-compliance" 
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  GDPR Compliance
+                </Link>
+              </li>
+              <li>
+                <Link 
+                  to="/data-protection" 
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Data Protection
+                </Link>
+              </li>
             </ul>
           </div>
 
           <div>
             <h3 className="text-lg font-semibold mb-4">Support</h3>
             <ul className="space-y-2">
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Help Center</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Community Guidelines</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Contact Support</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Report Issue</a></li>
+              <li>
+                <Link 
+                  to="/help-center" 
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Help Center
+                </Link>
+              </li>
+              <li>
+                <Link 
+                  to="/community-guidelines" 
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Community Guidelines
+                </Link>
+              </li>
+              <li>
+                <Link 
+                  to="/contact" 
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Contact Support
+                </Link>
+              </li>
+              <li>
+                <Link 
+                  to="/report-issue" 
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Report Issue
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
@@ -123,8 +165,18 @@ export const Footer: React.FC = () => {
               >
                 Terms
               </Link>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Cookies</a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Accessibility</a>
+              <Link 
+                to="/cookie-policy" 
+                className="text-gray-400 hover:text-white transition-colors text-sm"
+              >
+                Cookies
+              </Link>
+              <Link 
+                to="/accessibility" 
+                className="text-gray-400 hover:text-white transition-colors text-sm"
+              >
+                Accessibility
+              </Link>
             </div>
         </div>
       </div>
