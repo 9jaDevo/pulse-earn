@@ -4,12 +4,14 @@ import { SitemapStream, streamToPromise } from 'sitemap';
 import { Readable } from 'stream';
 import fs from 'fs';
 import path from 'path';
+
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
 
 // Initialize Supabase client
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -103,7 +105,7 @@ async function generateSitemap() {
     const xml = await streamToPromise(data);
     
     // Write sitemap to file
-    const outputPath = path.join(__dirname, '../public/sitemap.xml');
+    const outputPath = path.join(process.cwd(), 'public/sitemap.xml');
     fs.writeFileSync(outputPath, xml.toString());
     
     console.log(`Sitemap generated successfully at ${outputPath}`);
