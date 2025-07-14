@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { SettingsService } from '../services/settingsService';
 
 type Theme = 'light' | 'dark';
 
@@ -57,8 +58,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     const loadSettingsAsync = async () => {
       try {
-        const settingsModule = await import('../services/settingsService');
-        const result = await settingsModule.SettingsService.getSettings('general');
+        const result = await SettingsService.getSettings('general');
         const data = result.data;
         
         if (data && !result.error) {

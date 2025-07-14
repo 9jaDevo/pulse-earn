@@ -42,6 +42,10 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
   const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>(['USD']);
   const [loadingCurrencies, setLoadingCurrencies] = useState(true);
   
+  // Points conversion settings
+  const [pointsToUsdConversion, setPointsToUsdConversion] = useState<number>(100);
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
+  
   // Stripe state
   const [stripeInstance, setStripeInstance] = useState<ReturnType<typeof loadStripe> | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -164,8 +168,68 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
     if (isOpen && stripeInstance !== undefined) { // Wait for Stripe to be loaded or fail
       fetchPaymentMethods();
       fetchCurrencies();
+      fetchSettings();
+      fetchExchangeRates();
     }
   }, [isOpen, profile, pollCurrency, stripeInstance, stripeLoadError]);
+  
+  const fetchSettings = async () => {
+    try {
+      const { data, error } = await SettingsService.getSettings('promoted_polls');
+      
+      if (error) {
+        console.error('Error fetching settings:', error);
+        return;
+      }
+      
+      if (data?.points_to_usd_conversion) {
+        setPointsToUsdConversion(data.points_to_usd_conversion);
+      }
+    } catch (err) {
+      console.error('Failed to fetch settings:', err);
+    }
+  };
+  
+  const fetchExchangeRates = async () => {
+    try {
+      const { data: rates } = await SettingsService.getAllExchangeRates();
+      
+      if (rates) {
+        const ratesMap: Record<string, number> = {};
+        
+        rates.forEach(rate => {
+          if (!ratesMap[rate.from_currency]) {
+            ratesMap[rate.from_currency] = {};
+          }
+          ratesMap[rate.from_currency][rate.to_currency] = rate.rate;
+        });
+        
+        setExchangeRates(ratesMap);
+      }
+    } catch (err) {
+      console.error('Failed to fetch exchange rates:', err);
+    }
+  };
+  
+  // Convert amount between currencies
+  const convertAmount = (amount: number, fromCurrency: string, toCurrency: string): number => {
+    if (fromCurrency === toCurrency) return amount;
+    
+    // Check if we have a direct rate
+    if (exchangeRates[fromCurrency] && exchangeRates[fromCurrency][toCurrency]) {
+      return amount * exchangeRates[fromCurrency][toCurrency];
+    }
+    
+    // Try to calculate via USD
+    if (exchangeRates[fromCurrency] && exchangeRates[fromCurrency]['USD'] &&
+        exchangeRates['USD'] && exchangeRates['USD'][toCurrency]) {
+      return amount * exchangeRates[fromCurrency]['USD'] * exchangeRates['USD'][toCurrency];
+    }
+    
+    // Fallback to 1:1 if no conversion path found
+    console.warn(`No exchange rate found for ${fromCurrency} to ${toCurrency}`);
+    return amount;
+  };
 
   const handleRetryPayment = async () => {
     if (!user) {
@@ -410,7 +474,7 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
                   <div className="flex justify-between">
                     <span className="text-gray-600">Points Required:</span>
                     <span className="font-medium">
-                      {(promotedPoll.budget_amount * 100).toLocaleString()} points
+                      {(convertAmount(promotedPoll.budget_amount, pollCurrency, 'USD') * pointsToUsdConversion).toLocaleString()} points
                     </span>
                   </div>
                 )}
@@ -427,13 +491,13 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
             {/* Insufficient Points Warning */}
             {selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && 
              profile && 
-             profile.points < (promotedPoll.budget_amount * 100) && (
+             profile.points < (convertAmount(promotedPoll.budget_amount, pollCurrency, 'USD') * pointsToUsdConversion) && (
               <div className="bg-error-50 border border-error-200 rounded-lg p-4 flex items-start space-x-3 mt-4">
                 <AlertCircle className="h-5 w-5 text-error-500 flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-medium text-error-800 mb-1">Insufficient Points</h3>
                   <p className="text-error-700 text-sm">
-                    You don't have enough points for this payment. You need {(promotedPoll.budget_amount * 100).toLocaleString()} points, 
+                    You don't have enough points for this payment. You need {(convertAmount(promotedPoll.budget_amount, pollCurrency, 'USD') * pointsToUsdConversion).toLocaleString()} points, 
                     but you only have {profile.points.toLocaleString()} points. Please select a different payment method.
                   </p>
                 </div>
@@ -447,7 +511,7 @@ export const RetryPaymentModal: React.FC<RetryPaymentModalProps> = ({
                 disabled={loading || !selectedPaymentMethod || (
                   selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && 
                   profile && 
-                  profile.points < (promotedPoll.budget_amount * 100)
+                  profile.points < (convertAmount(promotedPoll.budget_amount, pollCurrency, 'USD') * pointsToUsdConversion)
                 )}
                 className="w-full bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >

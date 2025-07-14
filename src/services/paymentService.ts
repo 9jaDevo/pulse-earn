@@ -137,31 +137,29 @@ export class PaymentService {
       const { data: settings } = await SettingsService.getSettings('promoted_polls');
       const pointsToUsdConversion = settings?.points_to_usd_conversion || 100; // Default: 100 points = $1
       
-      // Get user's preferred currency
-      const { data: profile, error: profileError } = await ProfileService.fetchProfileById(userId);
-      
-      if (profileError || !profile) {
-        return { data: null, error: profileError || 'User profile not found' };
-      }
-      
-      const userCurrency = profile.currency || 'USD';
-      
-      // Convert amount to user's currency if different
-      let convertedAmount = amount;
-      if (currency !== userCurrency) {
-        const { data: exchangeRate, error: rateError } = await SettingsService.getExchangeRate(currency, userCurrency);
+      // Convert amount to USD first, regardless of the input currency
+      let amountInUSD = amount;
+      if (currency !== 'USD') {
+        const { data: exchangeRate, error: rateError } = await SettingsService.getExchangeRate(currency, 'USD');
         
         if (rateError) {
           return { data: null, error: rateError };
         }
         
         if (exchangeRate) {
-          convertedAmount = amount * exchangeRate;
+          amountInUSD = amount * exchangeRate;
         }
       }
       
-      // Calculate points needed in user's currency
-      const pointsNeeded = Math.round(convertedAmount * pointsToUsdConversion);
+      // Calculate points needed based on USD amount
+      const pointsNeeded = Math.round(amountInUSD * pointsToUsdConversion);
+      
+      // Get user's profile to check points balance
+      const { data: profile, error: profileError } = await ProfileService.fetchProfileById(userId);
+      
+      if (profileError || !profile) {
+        return { data: null, error: profileError || 'User profile not found' };
+      }
       
       // Check if user has enough points
       if (profile.points < pointsNeeded) {
@@ -187,16 +185,16 @@ export class PaymentService {
         .insert({
           user_id: userId,
           promoted_poll_id: promotedPollId,
-          amount,
-          currency,
-          original_amount: convertedAmount,
-          original_currency: userCurrency,
+          amount: amountInUSD,
+          currency: 'USD',
+          original_amount: amount,
+          original_currency: currency,
           payment_method: 'wallet',
           status: 'completed',
           metadata: {
             points_used: pointsNeeded,
             conversion_rate: pointsToUsdConversion,
-            exchange_rate: currency !== userCurrency ? convertedAmount / amount : 1
+            exchange_rate: currency !== 'USD' ? amountInUSD / amount : 1
           }
         })
         .select()

@@ -31,11 +31,12 @@ import { AddEditTriviaQuestionModal } from './AddEditTriviaQuestionModal';
 import { AddEditBadgeModal } from './AddEditBadgeModal';
 import { CreatePollModal } from '../polls/CreatePollModal';
 import { AddEditCategoryModal } from './AddEditCategoryModal';
+import { ContestManagement } from './ContestManagement';
 import { Pagination } from '../ui/Pagination';
 
 export const ContentManagement: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'polls' | 'categories' | 'trivia' | 'badges'>('polls');
+  const [activeTab, setActiveTab] = useState<'polls' | 'categories' | 'trivia' | 'badges' | 'contests'>('polls');
   const [categories, setCategories] = useState<PollCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1152,7 +1153,8 @@ export const ContentManagement: React.FC = () => {
             { key: 'polls', label: 'Polls', icon: BarChart3 },
             { key: 'categories', label: 'Categories', icon: Tag },
             { key: 'trivia', label: 'Trivia', icon: Brain },
-            { key: 'badges', label: 'Badges', icon: Award }
+            { key: 'badges', label: 'Badges', icon: Award },
+            { key: 'contests', label: 'Contests', icon: Award }
           ].map((tab) => (
             <button
               key={tab.key}
@@ -1175,6 +1177,9 @@ export const ContentManagement: React.FC = () => {
       {activeTab === 'categories' && renderCategories()}
       {activeTab === 'trivia' && renderTrivia()}
       {activeTab === 'badges' && renderBadges()}
+      {activeTab === 'contests' && (
+        <ContestManagement />
+      )}
       
       {/* Create Category Modal */}
       {showCategoryModal && (

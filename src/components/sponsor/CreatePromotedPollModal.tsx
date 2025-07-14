@@ -433,6 +433,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
           poll_id: selectedPollId,
           sponsor_id: sponsorId,
           budget_amount: budgetInUSD,
+          cost_per_vote: costPerVoteInUSD,
           target_votes: formData.targetVotes,
           start_date: formData.startDate || undefined,
           end_date: formData.endDate || undefined,
@@ -995,7 +996,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
                       <div className="flex justify-between">
                         <span className="text-gray-600">Points Required:</span>
                         <span className="font-medium">
-                          {(formData.budget * settings.points_to_usd_conversion).toLocaleString()} points
+                          {(convertAmount(formData.budget, formData.currency, 'USD') * settings.points_to_usd_conversion).toLocaleString()} points
                         </span>
                       </div>
                     )}
@@ -1023,13 +1024,13 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
               {/* Insufficient Points Warning */}
               {selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && 
                profile && 
-               profile.points < (formData.budget * settings.points_to_usd_conversion) && (
+               profile.points < (convertAmount(formData.budget, formData.currency, 'USD') * settings.points_to_usd_conversion) && (
                 <div className="bg-error-50 border border-error-200 rounded-lg p-4 flex items-start space-x-3 mt-4">
                   <AlertCircle className="h-5 w-5 text-error-500 flex-shrink-0 mt-0.5" />
                   <div>
                     <h3 className="font-medium text-error-800 mb-1">Insufficient Points</h3>
                     <p className="text-error-700 text-sm">
-                      You don't have enough points for this payment. You need {(formData.budget * settings.points_to_usd_conversion).toLocaleString()} points, 
+                      You don't have enough points for this payment. You need {(convertAmount(formData.budget, formData.currency, 'USD') * settings.points_to_usd_conversion).toLocaleString()} points, 
                       but you only have {profile.points.toLocaleString()} points. Please select a different payment method or reduce your budget.
                     </p>
                   </div>
@@ -1079,7 +1080,7 @@ export const CreatePromotedPollModal: React.FC<CreatePromotedPollModalProps> = (
               disabled={loading || (
                 selectedPaymentMethod === paymentMethods.find(m => m.type === 'wallet')?.id && 
                 profile && 
-                profile.points < (formData.budget * settings.points_to_usd_conversion)
+                profile.points < (convertAmount(formData.budget, formData.currency, 'USD') * settings.points_to_usd_conversion)
               )}
               className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
             >
